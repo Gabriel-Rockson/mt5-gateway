@@ -90,7 +90,7 @@ def fetch_data_pos_endpoint():
             return not_found_response("rates data", symbol)
 
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        df['time'] = pd.to_datetime(df['time'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         return jsonify(df.to_dict(orient='records'))
 
@@ -190,7 +190,7 @@ def fetch_data_range_endpoint():
             return not_found_response("rates data", symbol)
 
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        df['time'] = pd.to_datetime(df['time'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         return jsonify(df.to_dict(orient='records'))
 
