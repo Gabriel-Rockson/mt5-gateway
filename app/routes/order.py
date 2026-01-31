@@ -196,20 +196,31 @@ def send_market_order_endpoint():
                 "Order execution failed - MT5 returned None"
             )
 
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
+        if result.retcode not in [mt5.TRADE_RETCODE_DONE, mt5.TRADE_RETCODE_DONE_PARTIAL]:
             logger.error(
                 f"[{request_id}] MT5 rejected order: retcode={result.retcode}, comment={result.comment}"
             )
             return mt5_error_response("Send order", result)
+
+        partial_fill = result.retcode == mt5.TRADE_RETCODE_DONE_PARTIAL
+        if partial_fill:
+            logger.warning(
+                f"[{request_id}] Partial fill: requested={volume}, filled={result.volume}"
+            )
 
         action_str = "executed" if action == TRADE_ACTION_DEAL else "placed"
         logger.info(
             f"[{request_id}] Order {action_str} successfully: {order_type_str}, symbol={data['symbol']}, volume={volume}, price={result.price}, order={result.order}, deal={result.deal}"
         )
 
-        return jsonify(
-            {"message": f"Order {action_str} successfully", "result": result._asdict()}
-        )
+        result_dict = result._asdict()
+        return jsonify({
+            "message": f"Order {action_str} successfully",
+            "result": result_dict,
+            "sl_confirmed": result_dict.get("sl"),
+            "tp_confirmed": result_dict.get("tp"),
+            "partial_fill": partial_fill,
+        })
 
     except Exception as e:
         return internal_error_response("send_order", e)
