@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 
 import MetaTrader5 as mt5
 from constants import ORDER_TYPE_TO_STRING, TRADE_ACTION_DEAL, TRADE_ACTION_PENDING
@@ -21,6 +22,9 @@ from lib import (
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
+
+# Global max volume limit for safety (can be overridden via environment variable)
+MAX_VOLUME_LOTS = float(os.getenv("MAX_VOLUME_LOTS", "100.0"))
 
 
 @order_bp.route("/order", methods=["POST"])
@@ -100,6 +104,11 @@ def send_market_order_endpoint():
         volume = float(data["volume"])
         if volume <= 0:
             return validation_error_response("Volume must be positive")
+
+        if volume > MAX_VOLUME_LOTS:
+            return validation_error_response(
+                f"Volume {volume} exceeds global maximum ({MAX_VOLUME_LOTS} lots)"
+            )
 
         is_valid, error_msg = validate_volume(data["symbol"], volume)
         if not is_valid:
@@ -316,6 +325,11 @@ def order_check_endpoint():
         volume = float(data["volume"])
         if volume <= 0:
             return validation_error_response("Volume must be positive")
+
+        if volume > MAX_VOLUME_LOTS:
+            return validation_error_response(
+                f"Volume {volume} exceeds global maximum ({MAX_VOLUME_LOTS} lots)"
+            )
 
         is_valid, error_msg = validate_volume(data["symbol"], volume)
         if not is_valid:
