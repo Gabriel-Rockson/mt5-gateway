@@ -375,3 +375,26 @@ def validate_pending_price(order_type, symbol, price):
 
     return True, None
 
+
+def validate_type_filling(type_filling_input):
+    """
+    Validate and convert type_filling to MT5 constant.
+    Accepts string values (FOK, IOC, RETURN) or integer constants.
+    Returns (mt5_constant, None) if valid, (None, error_message) if invalid.
+    """
+    TYPE_FILLING_MAP = {
+        "FOK": mt5.ORDER_FILLING_FOK,
+        "IOC": mt5.ORDER_FILLING_IOC,
+        "RETURN": mt5.ORDER_FILLING_RETURN,
+    }
+
+    if isinstance(type_filling_input, str):
+        type_filling_str = type_filling_input.upper()
+        if type_filling_str not in TYPE_FILLING_MAP:
+            return None, f"Invalid type_filling: {type_filling_input}. Must be one of: FOK, IOC, RETURN"
+        return TYPE_FILLING_MAP[type_filling_str], None
+    elif isinstance(type_filling_input, int):
+        return type_filling_input, None
+    else:
+        return None, "type_filling must be a string (FOK, IOC, RETURN) or integer constant"
+

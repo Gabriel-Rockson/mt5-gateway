@@ -11,7 +11,13 @@ from errors import (
 )
 from flasgger import swag_from
 from flask import Blueprint, g, jsonify, request
-from lib import validate_pending_price, validate_sl_tp, validate_symbol, validate_volume
+from lib import (
+    validate_pending_price,
+    validate_sl_tp,
+    validate_symbol,
+    validate_type_filling,
+    validate_volume,
+)
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
@@ -164,6 +170,12 @@ def send_market_order_endpoint():
                 return validation_error_response(error_msg)
             logger.info(f"[{request_id}] SL/TP validation passed")
 
+        type_filling = mt5.ORDER_FILLING_IOC
+        if "type_filling" in data:
+            type_filling, error_msg = validate_type_filling(data["type_filling"])
+            if error_msg:
+                return validation_error_response(error_msg)
+
         request_data = {
             "action": action,
             "symbol": data["symbol"],
@@ -174,7 +186,7 @@ def send_market_order_endpoint():
             "magic": data.get("magic", 0),
             "comment": data.get("comment", ""),
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": data.get("type_filling", mt5.ORDER_FILLING_IOC),
+            "type_filling": type_filling,
         }
 
         if sl is not None:
@@ -196,7 +208,10 @@ def send_market_order_endpoint():
                 "Order execution failed - MT5 returned None"
             )
 
-        if result.retcode not in [mt5.TRADE_RETCODE_DONE, mt5.TRADE_RETCODE_DONE_PARTIAL]:
+        if result.retcode not in [
+            mt5.TRADE_RETCODE_DONE,
+            mt5.TRADE_RETCODE_DONE_PARTIAL,
+        ]:
             logger.error(
                 f"[{request_id}] MT5 rejected order: retcode={result.retcode}, comment={result.comment}"
             )
@@ -214,13 +229,15 @@ def send_market_order_endpoint():
         )
 
         result_dict = result._asdict()
-        return jsonify({
-            "message": f"Order {action_str} successfully",
-            "result": result_dict,
-            "sl_confirmed": result_dict.get("sl"),
-            "tp_confirmed": result_dict.get("tp"),
-            "partial_fill": partial_fill,
-        })
+        return jsonify(
+            {
+                "message": f"Order {action_str} successfully",
+                "result": result_dict,
+                "sl_confirmed": result_dict.get("sl"),
+                "tp_confirmed": result_dict.get("tp"),
+                "partial_fill": partial_fill,
+            }
+        )
 
     except Exception as e:
         return internal_error_response("send_order", e)
@@ -361,6 +378,12 @@ def order_check_endpoint():
                 return validation_error_response(error_msg)
             logger.info(f"[{request_id}] SL/TP validation passed")
 
+        type_filling = mt5.ORDER_FILLING_IOC
+        if "type_filling" in data:
+            type_filling, error_msg = validate_type_filling(data["type_filling"])
+            if error_msg:
+                return validation_error_response(error_msg)
+
         request_data = {
             "action": action,
             "symbol": data["symbol"],
@@ -371,7 +394,7 @@ def order_check_endpoint():
             "magic": data.get("magic", 0),
             "comment": data.get("comment", ""),
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": type_filling,
         }
 
         if sl is not None:
@@ -961,4 +984,3 @@ def modify_order(ticket):
 
     except Exception as e:
         return internal_error_response("modify_order", e)
-
