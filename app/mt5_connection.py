@@ -6,6 +6,7 @@ from threading import Lock
 from typing import Optional
 
 import MetaTrader5 as mt5
+from algo_trading_enabler import enable_algo_trading
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,9 @@ class MT5Connection:
                             "attempt": attempt
                         })
                         self._set_status(ConnectionStatus.CONNECTED)
+
+                        enable_algo_trading()
+
                         return True
 
                 error_code, error_str = mt5.last_error()
