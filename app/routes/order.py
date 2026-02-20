@@ -418,6 +418,11 @@ def order_check_endpoint():
 
         result = mt5.order_check(request_data)
         if result is None:
+            error_code, error_str = mt5.last_error()
+            logger.error(
+                f"[{request_id}] order_check returned None: mt5_error_code={error_code}, mt5_error_str={error_str}, "
+                f"symbol={data['symbol']}, price={price}, sl={sl}, tp={tp}"
+            )
             return validation_error_response("Order check failed - MT5 returned None")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE and result.retcode != 0:
