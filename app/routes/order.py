@@ -418,9 +418,7 @@ def order_check_endpoint():
 
         result = mt5.order_check(request_data)
         if result is None:
-            return validation_error_response(
-                "Order check failed - MT5 returned None"
-            ), 400
+            return validation_error_response("Order check failed - MT5 returned None")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE and result.retcode != 0:
             return jsonify(
@@ -535,11 +533,11 @@ def order_calc_margin_endpoint():
                 {
                     "reason": "Symbol may not support this calculation or parameters are invalid"
                 },
-            ), 400
+            )
 
         if margin < 0:
             logger.warning(f"Negative margin calculated for {data['symbol']}: {margin}")
-            return validation_error_response("Invalid margin calculation result"), 400
+            return validation_error_response("Invalid margin calculation result")
 
         return jsonify({"margin": margin})
 
@@ -646,7 +644,7 @@ def order_calc_profit_endpoint():
             return validation_error_response(
                 "Profit calculation unavailable",
                 {"reason": "Symbol may not support this calculation"},
-            ), 400
+            )
 
         logger.info(
             f"Profit calculated: symbol={data['symbol']}, volume={volume}, price_open={price_open}, price_close={price_close}, profit={profit}"
@@ -829,9 +827,7 @@ def cancel_order(ticket):
 
         if result is None:
             logger.error(f"order_send returned None for cancel ticket {ticket}")
-            return validation_error_response(
-                "Order cancellation failed - MT5 returned None"
-            ), 400
+            return validation_error_response("Order cancellation failed - MT5 returned None")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(
@@ -978,9 +974,7 @@ def modify_order(ticket):
 
         if result is None:
             logger.error(f"order_send returned None for modify ticket {ticket}")
-            return validation_error_response(
-                "Order modification failed - MT5 returned None"
-            ), 400
+            return validation_error_response("Order modification failed - MT5 returned None")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(
