@@ -1,3 +1,4 @@
+import concurrent.futures
 import logging
 
 import MetaTrader5 as mt5
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
         },
         500: {
             'description': 'Internal server error.'
+        },
+        503: {
+            'description': 'MT5 terminal is unavailable or timed out.'
         }
     }
 })
@@ -44,11 +48,18 @@ def get_symbols_endpoint():
     """
     try:
         search = request.args.get('search', '*')
-        symbols = mt5.symbols_get(group=search)
-        
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(mt5.symbols_get, group=search)
+            try:
+                symbols = future.result(timeout=8)
+            except concurrent.futures.TimeoutError:
+                logger.error("symbols_get timed out after 8 seconds - MT5 may be reinitialising")
+                return jsonify({"error": "MT5 symbols_get timed out"}), 503
+
         if symbols is None:
-            return jsonify({"total": 0, "symbols": []}), 200
-            
+            return jsonify({"error": "MT5 symbols_get returned None"}), 503
+
         symbol_names = [s.name for s in symbols]
         return jsonify({
             "total": len(symbol_names),

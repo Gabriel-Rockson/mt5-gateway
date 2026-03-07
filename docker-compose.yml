@@ -15,11 +15,11 @@ services:
       - "5001:5001"
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health/ready"]
+      test: ["CMD", "curl", "-f", "--max-time", "10", "http://localhost:5001/symbols"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
     deploy:
       resources:

@@ -9,4 +9,4 @@ source /scripts/02-common.sh
 
 log_message "INFO" "Starting Flask API with waitress..."
 cd /app
-exec wine python -m waitress --host=0.0.0.0 --port=${MT5_API_PORT:-5001} --threads=4 app:app
+exec wine python -m waitress --host=0.0.0.0 --port=${MT5_API_PORT:-5001} --threads=16 app:app
