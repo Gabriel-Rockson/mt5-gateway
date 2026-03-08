@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.1.0...mt5-gateway-v1.2.0) (2026-03-08)
+
+
+### Features
+
+* **mt5-gateway:** add new field for checking terminal algo trading status ([942cd73](https://github.com/Gabriel-Rockson/axiom/commit/942cd73cd4340a78e94090676816449357acb133))
+
 ## [1.1.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.0.0...mt5-gateway-v1.1.0) (2026-03-08)
 
 
