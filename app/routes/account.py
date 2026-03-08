@@ -61,9 +61,14 @@ def get_account_info():
 
             return jsonify(response), 503
 
-        logger.info(f"Account info retrieved: login={account_info.login}, equity={account_info.equity}, margin_free={account_info.margin_free}")
+        terminal_info = mt5.terminal_info()
+        terminal_trade_allowed = terminal_info.trade_allowed if terminal_info is not None else False
 
-        return jsonify(account_info._asdict())
+        logger.info(f"Account info retrieved: login={account_info.login}, equity={account_info.equity}, margin_free={account_info.margin_free}, terminal_trade_allowed={terminal_trade_allowed}")
+
+        result = account_info._asdict()
+        result["terminal_trade_allowed"] = terminal_trade_allowed
+        return jsonify(result)
 
     except Exception as e:
         return internal_error_response("get_account_info", e)
