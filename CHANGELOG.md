@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.0.0...mt5-gateway-v1.1.0) (2026-03-08)
+
+
+### Features
+
+* **mt5-gateway:** prevent thread exhaustion on MT5 symbols_get hang ([059a01f](https://github.com/Gabriel-Rockson/axiom/commit/059a01f2362948997f1a3a72b0076e5f1f49c1ee))
+
 ## 1.0.0 (2026-02-28)
 
 
