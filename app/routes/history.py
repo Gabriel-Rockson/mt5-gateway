@@ -190,7 +190,10 @@ def history_deals_get_endpoint():
 
         from_timestamp = int(from_date.timestamp())
         to_timestamp = int(to_date.timestamp())
-        deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+        if position == 0:
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp)
+        else:
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
 
         if deals is None:
             return not_found_response("deals history", position)
