@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.2.0...mt5-gateway-v1.2.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** ensure that position 0 is not used in fetching deals ([61d2cfd](https://github.com/Gabriel-Rockson/axiom/commit/61d2cfdf572623a8ea9e90a6ce8d736427cda73b))
+
 ## [1.2.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.1.0...mt5-gateway-v1.2.0) (2026-03-08)
 
 
