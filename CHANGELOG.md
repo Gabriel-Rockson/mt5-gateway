@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.2.1...mt5-gateway-v1.3.0) (2026-04-10)
+
+
+### Features
+
+* **mt5-gateway:** ensure that the mt5-gateway can take expiry for orders ([d269abb](https://github.com/Gabriel-Rockson/axiom/commit/d269abbf6d1b4e3b16e4111b4ba78b03c6467e4f))
+
 ## [1.2.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.2.0...mt5-gateway-v1.2.1) (2026-03-10)
 
 
