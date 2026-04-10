@@ -185,6 +185,12 @@ def send_market_order_endpoint():
             if error_msg:
                 return validation_error_response(error_msg)
 
+        expiry_ts = data.get("expiry")
+        if expiry_ts is not None:
+            type_time = mt5.ORDER_TIME_SPECIFIED
+        else:
+            type_time = mt5.ORDER_TIME_GTC
+
         request_data = {
             "action": action,
             "symbol": data["symbol"],
@@ -194,10 +200,12 @@ def send_market_order_endpoint():
             "deviation": data.get("deviation", 20),
             "magic": data.get("magic", 0),
             "comment": data.get("comment", ""),
-            "type_time": mt5.ORDER_TIME_GTC,
+            "type_time": type_time,
             "type_filling": type_filling,
         }
 
+        if expiry_ts is not None:
+            request_data["expiration"] = int(expiry_ts)
         if sl is not None:
             request_data["sl"] = sl
         if tp is not None:
