@@ -11,8 +11,8 @@ services:
       - .env
     restart: unless-stopped
     ports:
-      - "3000:3000"
-      - "5001:5001"
+      - "${MT5_GATEWAY_VNC_PORT:-10004}:3000"
+      - "${MT5_GATEWAY_API_PORT:-10003}:5001"
 
     healthcheck:
       test: ["CMD", "curl", "-f", "--max-time", "10", "http://localhost:5001/symbols"]

@@ -22,34 +22,34 @@ Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfo
    docker compose up
    ```
 
-4. **Important**: Connect to VNC at `localhost:3000` using your VNC password. Login to MT5 with your broker account through the GUI. The API endpoints won't work until you're logged in.
+4. **Important**: Connect to VNC at `localhost:10004` using your VNC password. Login to MT5 with your broker account through the GUI. The API endpoints won't work until you're logged in.
 
-5. API is now available at `http://localhost:5001`
+5. API is now available at `http://localhost:10003`
 
 ## Ports
 
-- **3000** - VNC server for MT5 GUI access
-- **5001** - HTTP API
+- **10004** - VNC server for MT5 GUI access
+- **10003** - HTTP API
 
 ## API Documentation
 
-Full interactive API documentation available at `http://localhost:5001/apidocs` after starting the server.
+Full interactive API documentation available at `http://localhost:10003/apidocs` after starting the server.
 
 ## Example Usage
 
 Get account info:
 ```bash
-curl http://localhost:5001/account
+curl http://localhost:10003/account
 ```
 
 Fetch 100 bars of data:
 ```bash
-curl "http://localhost:5001/fetch_data_pos?symbol=EURUSD&timeframe=M1&num_bars=100"
+curl "http://localhost:10003/fetch_data_pos?symbol=EURUSD&timeframe=M1&num_bars=100"
 ```
 
 Place a market order:
 ```bash
-curl -X POST http://localhost:5001/order \
+curl -X POST http://localhost:10003/order \
   -H "Content-Type: application/json" \
   -d '{
     "symbol": "EURUSD",
