@@ -4,11 +4,16 @@ Broker timezone detection and translation.
 MT5 emits Unix timestamps that decode to broker server local wallclock — i.e.,
 the integer corresponds to the broker's clock readings interpreted as if it were
 UTC. To present a consistent real-UTC interface to downstream consumers, this
-module detects the broker's IANA timezone by probing `symbol_info_tick` and
-exposes `to_real_utc` / `from_real_utc` conversion helpers.
+module identifies the broker's IANA timezone and exposes `to_real_utc` /
+`from_real_utc` conversion helpers.
 
-The probe runs lazily on first access and re-runs every REFRESH_INTERVAL_S so
-DST transitions are picked up without requiring a process restart.
+Two sources for the timezone, in order of authority:
+  1. BROKER_TIMEZONE env var (e.g. "Europe/Athens"). When set, this is the
+     active timezone immediately at startup — no race window on first
+     requests.
+  2. A background probe of `symbol_info_tick`. Used to detect the offset when
+     the env var is not set, and as a sanity check that surfaces config drift
+     when it is set (logs a warning on disagreement; env still wins).
 """
 
 import logging
@@ -37,6 +42,9 @@ KNOWN_ZONES = [
 ]
 
 REFRESH_INTERVAL_S = 15 * 60
+INITIAL_DELAY_S = 5      # let MT5 come up before first probe
+TICK_POLL_TIMEOUT_S = 10  # how long to wait for the first tick during a probe
+TICK_POLL_INTERVAL_S = 0.5
 PROBE_SYMBOL = "XAUUSD"
 
 
@@ -57,54 +65,95 @@ def _map_offset_to_zone(offset_seconds: int) -> str:
 
 
 class BrokerClock:
-    def __init__(self, fallback_timezone: str = "UTC"):
+    def __init__(self, env_timezone: Optional[str] = None):
         self._lock = threading.Lock()
-        self._fallback = fallback_timezone
-        self._timezone = fallback_timezone
-        self._zone_obj: Optional[ZoneInfo] = None if fallback_timezone == "UTC" else ZoneInfo(fallback_timezone)
-        self._last_probed_at = 0.0
+        # Empty string env var is the same as unset.
+        self._env_timezone: Optional[str] = env_timezone or None
+        initial = self._env_timezone or "UTC"
+        self._timezone: str = initial
+        self._zone_obj: Optional[ZoneInfo] = None if initial == "UTC" else ZoneInfo(initial)
+
+        if self._env_timezone:
+            logger.info(
+                f"broker clock pinned to {self._env_timezone} via BROKER_TIMEZONE env var"
+            )
+        else:
+            logger.info(
+                "broker clock: no BROKER_TIMEZONE env set; will rely on background probe"
+            )
+
+        # Background daemon thread keeps the timezone in sync without blocking requests.
+        self._probe_thread = threading.Thread(
+            target=self._probe_loop, daemon=True, name="broker-clock-probe"
+        )
+        self._probe_thread.start()
 
     @property
     def timezone(self) -> str:
-        if time.time() - self._last_probed_at > REFRESH_INTERVAL_S:
-            self._probe()
         return self._timezone
 
     @property
     def zone(self) -> Optional[ZoneInfo]:
-        """Cached ZoneInfo for the current broker zone (None if UTC)."""
-        if time.time() - self._last_probed_at > REFRESH_INTERVAL_S:
-            self._probe()
         return self._zone_obj
 
-    def _probe(self) -> None:
-        with self._lock:
-            if time.time() - self._last_probed_at <= REFRESH_INTERVAL_S:
-                return
+    def _probe_loop(self) -> None:
+        time.sleep(INITIAL_DELAY_S)
+        while True:
+            try:
+                self._probe_once()
+            except Exception as e:
+                logger.warning(f"broker clock probe loop error: {e}")
+            time.sleep(REFRESH_INTERVAL_S)
+
+    def _probe_once(self) -> None:
+        # Make sure the probe symbol is in MarketWatch; otherwise no ticks flow.
+        try:
+            mt5.symbol_select(PROBE_SYMBOL, True)
+        except Exception as e:
+            logger.warning(f"broker clock probe: symbol_select({PROBE_SYMBOL}) failed: {e}")
+            return
+
+        # Poll for the first real tick — fresh MT5 connections need a moment.
+        deadline = time.time() + TICK_POLL_TIMEOUT_S
+        tick_time = 0
+        while time.time() < deadline:
             try:
                 tick = mt5.symbol_info_tick(PROBE_SYMBOL)
-                if tick is None or not getattr(tick, "time", None):
-                    raise RuntimeError(f"no tick for {PROBE_SYMBOL}")
-                real_now = int(time.time())
-                delta = int(tick.time) - real_now
-                # Snap to 15-min grid to absorb network jitter.
-                offset = round(delta / 900) * 900
-                detected = _map_offset_to_zone(offset)
+            except Exception:
+                tick = None
+            if tick is not None and getattr(tick, "time", 0):
+                tick_time = int(tick.time)
+                break
+            time.sleep(TICK_POLL_INTERVAL_S)
+
+        if not tick_time:
+            logger.warning(
+                f"broker clock probe: no tick for {PROBE_SYMBOL} within {TICK_POLL_TIMEOUT_S}s"
+            )
+            return
+
+        # Snap to 15-min grid to absorb network jitter.
+        offset = round((tick_time - int(time.time())) / 900) * 900
+        detected = _map_offset_to_zone(offset)
+
+        with self._lock:
+            if self._env_timezone:
+                if detected != self._env_timezone:
+                    logger.warning(
+                        f"broker clock probe disagrees with BROKER_TIMEZONE env: "
+                        f"probe detected {detected} (offset {offset:+}s), env is {self._env_timezone}. "
+                        f"Keeping env value — fix the env or investigate the broker server config."
+                    )
+                else:
+                    logger.info(f"broker clock probe confirmed {detected}")
+            else:
                 if detected != self._timezone:
                     logger.info(
-                        f"broker clock detected: offset={offset:+}s "
-                        f"({offset/3600:+.1f}h) → {detected} "
-                        f"(was {self._timezone})"
+                        f"broker clock probe detected: offset={offset:+}s "
+                        f"({offset/3600:+.1f}h) → {detected} (was {self._timezone})"
                     )
-                self._timezone = detected
-                self._zone_obj = None if detected == "UTC" else ZoneInfo(detected)
-                self._last_probed_at = time.time()
-            except Exception as e:
-                logger.warning(
-                    f"broker clock probe failed, keeping {self._timezone}: {e}"
-                )
-                # Back off briefly so we don't hammer on persistent failure.
-                self._last_probed_at = time.time() - REFRESH_INTERVAL_S + 60
+                    self._timezone = detected
+                    self._zone_obj = None if detected == "UTC" else ZoneInfo(detected)
 
     # Fields that hold seconds since epoch.
     _SEC_FIELDS = ("time", "time_setup", "time_done", "time_expiration", "time_update")
@@ -128,7 +177,7 @@ class BrokerClock:
         """Convert MT5 broker-wallclock-as-UTC epoch → real UTC epoch."""
         if broker_epoch is None:
             return None
-        zone = self.zone
+        zone = self._zone_obj
         if zone is None:
             return int(broker_epoch)
         # The raw epoch decodes to broker wallclock when interpreted as UTC.
@@ -140,7 +189,7 @@ class BrokerClock:
         """Convert real UTC epoch → broker-wallclock-as-UTC epoch (for MT5 SDK input)."""
         if real_epoch is None:
             return None
-        zone = self.zone
+        zone = self._zone_obj
         if zone is None:
             return int(real_epoch)
         real_dt = datetime.fromtimestamp(int(real_epoch), tz=timezone.utc)
@@ -158,17 +207,13 @@ class BrokerClock:
         """
         import pandas as pd
 
-        tz_name = self.timezone
+        tz_name = self._timezone
         if tz_name == "UTC":
             return epoch_series
         ts = pd.to_datetime(epoch_series, unit="s")
-        # Localize as broker-time, then convert to real UTC. Pass the timezone name
-        # (string) — pandas 1.4 does not accept ZoneInfo objects directly.
+        # Pass the timezone name (string) — pandas 1.4 does not accept ZoneInfo objects.
         return ts.dt.tz_localize(tz_name).dt.tz_convert("UTC").astype("int64") // 10**9
 
 
-# Singleton — env var lets ops force a specific zone when the probe is unreliable
-# (e.g., market closed on first boot).
-broker_clock = BrokerClock(
-    fallback_timezone=os.environ.get("BROKER_TIMEZONE", "UTC")
-)
+# Singleton.
+broker_clock = BrokerClock(env_timezone=os.environ.get("BROKER_TIMEZONE", "").strip() or None)
