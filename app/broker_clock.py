@@ -42,10 +42,40 @@ KNOWN_ZONES = [
 ]
 
 REFRESH_INTERVAL_S = 15 * 60
-INITIAL_DELAY_S = 5      # let MT5 come up before first probe
-TICK_POLL_TIMEOUT_S = 10  # how long to wait for the first tick during a probe
-TICK_POLL_INTERVAL_S = 0.5
-PROBE_SYMBOL = "XAUUSD"
+INITIAL_DELAY_S = 5             # let MT5 come up before first probe
+PER_CANDIDATE_POLL_S = 3        # poll each candidate up to this long
+PER_CANDIDATE_INTERVAL_S = 0.5
+MAX_PROBE_CANDIDATES = 5        # cap attempts so a quiet symbol list doesn't stall
+
+
+def _find_probe_symbols() -> list:
+    """
+    Return an ordered list of candidate symbols for clock probing. Different
+    brokers rename instruments with suffixes (`EURUSD.r`, `EURUSDm`, `EURUSD.cash`),
+    so we enumerate the broker's actual symbol catalog rather than hardcoding
+    one name. EUR-prefixed forex pairs are the most universally liquid 24/5
+    candidates; we prefer something resembling EURUSD specifically.
+    """
+    candidates: list = []
+    env_sym = os.environ.get("BROKER_PROBE_SYMBOL", "").strip()
+    if env_sym:
+        candidates.append(env_sym)
+    try:
+        all_syms = mt5.symbols_get() or []
+    except Exception as e:
+        logger.warning(f"broker clock: symbols_get failed: {e}")
+        return candidates
+
+    # Pass 1: names that begin with EURUSD (covers EURUSD, EURUSD.r, EURUSDm, etc).
+    for s in all_syms:
+        if s.name.upper().startswith("EURUSD") and s.name not in candidates:
+            candidates.append(s.name)
+    # Pass 2: any other EUR-prefixed forex pair (length ≥ 6 to exclude indices like EURO50).
+    for s in all_syms:
+        nm = s.name.upper()
+        if nm.startswith("EUR") and len(s.name) >= 6 and s.name not in candidates:
+            candidates.append(s.name)
+    return candidates
 
 
 def _map_offset_to_zone(offset_seconds: int) -> str:
@@ -106,29 +136,39 @@ class BrokerClock:
             time.sleep(REFRESH_INTERVAL_S)
 
     def _probe_once(self) -> None:
-        # Make sure the probe symbol is in MarketWatch; otherwise no ticks flow.
-        try:
-            mt5.symbol_select(PROBE_SYMBOL, True)
-        except Exception as e:
-            logger.warning(f"broker clock probe: symbol_select({PROBE_SYMBOL}) failed: {e}")
+        candidates = _find_probe_symbols()
+        if not candidates:
+            logger.warning(
+                "broker clock probe: no usable symbol found in broker's symbols_get() catalog"
+            )
             return
 
-        # Poll for the first real tick — fresh MT5 connections need a moment.
-        deadline = time.time() + TICK_POLL_TIMEOUT_S
+        used_symbol = None
         tick_time = 0
-        while time.time() < deadline:
+        for symbol in candidates[:MAX_PROBE_CANDIDATES]:
             try:
-                tick = mt5.symbol_info_tick(PROBE_SYMBOL)
-            except Exception:
-                tick = None
-            if tick is not None and getattr(tick, "time", 0):
-                tick_time = int(tick.time)
+                mt5.symbol_select(symbol, True)
+            except Exception as e:
+                logger.debug(f"broker clock probe: symbol_select({symbol}) failed: {e}")
+                continue
+            # Short poll per candidate — quiet symbols get skipped quickly.
+            deadline = time.time() + PER_CANDIDATE_POLL_S
+            while time.time() < deadline:
+                try:
+                    tick = mt5.symbol_info_tick(symbol)
+                except Exception:
+                    tick = None
+                if tick is not None and getattr(tick, "time", 0):
+                    tick_time = int(tick.time)
+                    used_symbol = symbol
+                    break
+                time.sleep(PER_CANDIDATE_INTERVAL_S)
+            if tick_time:
                 break
-            time.sleep(TICK_POLL_INTERVAL_S)
 
         if not tick_time:
             logger.warning(
-                f"broker clock probe: no tick for {PROBE_SYMBOL} within {TICK_POLL_TIMEOUT_S}s"
+                f"broker clock probe: no tick from any of {candidates[:MAX_PROBE_CANDIDATES]}"
             )
             return
 
@@ -141,16 +181,17 @@ class BrokerClock:
                 if detected != self._env_timezone:
                     logger.warning(
                         f"broker clock probe disagrees with BROKER_TIMEZONE env: "
-                        f"probe detected {detected} (offset {offset:+}s), env is {self._env_timezone}. "
+                        f"probe detected {detected} (offset {offset:+}s, via {used_symbol}), "
+                        f"env is {self._env_timezone}. "
                         f"Keeping env value — fix the env or investigate the broker server config."
                     )
                 else:
-                    logger.info(f"broker clock probe confirmed {detected}")
+                    logger.info(f"broker clock probe confirmed {detected} (via {used_symbol})")
             else:
                 if detected != self._timezone:
                     logger.info(
                         f"broker clock probe detected: offset={offset:+}s "
-                        f"({offset/3600:+.1f}h) → {detected} (was {self._timezone})"
+                        f"({offset/3600:+.1f}h) → {detected} (was {self._timezone}, via {used_symbol})"
                     )
                     self._timezone = detected
                     self._zone_obj = None if detected == "UTC" else ZoneInfo(detected)
