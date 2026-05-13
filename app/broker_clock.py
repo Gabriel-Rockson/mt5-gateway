@@ -16,6 +16,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from typing import Optional, Union
 from zoneinfo import ZoneInfo
 
 import MetaTrader5 as mt5
@@ -40,9 +41,11 @@ PROBE_SYMBOL = "XAUUSD"
 
 
 def _map_offset_to_zone(offset_seconds: int) -> str:
-    now = datetime.now()
+    # Must be tz-aware: ZoneInfo.utcoffset() returns None for naive datetimes.
+    now = datetime.now(tz=timezone.utc)
     for tz_name in KNOWN_ZONES:
-        if int(ZoneInfo(tz_name).utcoffset(now).total_seconds()) == offset_seconds:
+        off = ZoneInfo(tz_name).utcoffset(now)
+        if off is not None and int(off.total_seconds()) == offset_seconds:
             return tz_name
     if offset_seconds == 0:
         return "UTC"
@@ -58,7 +61,7 @@ class BrokerClock:
         self._lock = threading.Lock()
         self._fallback = fallback_timezone
         self._timezone = fallback_timezone
-        self._zone_obj: ZoneInfo | None = None if fallback_timezone == "UTC" else ZoneInfo(fallback_timezone)
+        self._zone_obj: Optional[ZoneInfo] = None if fallback_timezone == "UTC" else ZoneInfo(fallback_timezone)
         self._last_probed_at = 0.0
 
     @property
@@ -68,7 +71,7 @@ class BrokerClock:
         return self._timezone
 
     @property
-    def zone(self) -> ZoneInfo | None:
+    def zone(self) -> Optional[ZoneInfo]:
         """Cached ZoneInfo for the current broker zone (None if UTC)."""
         if time.time() - self._last_probed_at > REFRESH_INTERVAL_S:
             self._probe()
@@ -121,7 +124,7 @@ class BrokerClock:
                 d[f] = self.to_real_utc(v // 1000) * 1000 + (v % 1000)
         return d
 
-    def to_real_utc(self, broker_epoch: int | float | None) -> int | None:
+    def to_real_utc(self, broker_epoch: Optional[Union[int, float]]) -> Optional[int]:
         """Convert MT5 broker-wallclock-as-UTC epoch → real UTC epoch."""
         if broker_epoch is None:
             return None
@@ -133,7 +136,7 @@ class BrokerClock:
         aware_broker = naive_broker.replace(tzinfo=zone)
         return int(aware_broker.astimezone(timezone.utc).timestamp())
 
-    def from_real_utc(self, real_epoch: int | float | None) -> int | None:
+    def from_real_utc(self, real_epoch: Optional[Union[int, float]]) -> Optional[int]:
         """Convert real UTC epoch → broker-wallclock-as-UTC epoch (for MT5 SDK input)."""
         if real_epoch is None:
             return None
@@ -155,12 +158,13 @@ class BrokerClock:
         """
         import pandas as pd
 
-        zone = self.zone
-        if zone is None:
+        tz_name = self.timezone
+        if tz_name == "UTC":
             return epoch_series
         ts = pd.to_datetime(epoch_series, unit="s")
-        # Localize as broker-time, then convert to real UTC.
-        return ts.dt.tz_localize(zone).dt.tz_convert("UTC").astype("int64") // 10**9
+        # Localize as broker-time, then convert to real UTC. Pass the timezone name
+        # (string) — pandas 1.4 does not accept ZoneInfo objects directly.
+        return ts.dt.tz_localize(tz_name).dt.tz_convert("UTC").astype("int64") // 10**9
 
 
 # Singleton — env var lets ops force a specific zone when the probe is unreliable
