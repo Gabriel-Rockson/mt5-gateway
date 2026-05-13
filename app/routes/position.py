@@ -1,6 +1,7 @@
 import logging
 
 import MetaTrader5 as mt5
+from broker_clock import broker_clock
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
@@ -63,7 +64,7 @@ def close_position_endpoint():
             return mt5_error_response("Close position", result)
 
         return jsonify(
-            {"message": "Position closed successfully", "result": result._asdict()}
+            {"message": "Position closed successfully", "result": broker_clock.normalize_mt5_dict(result._asdict())}
         )
 
     except Exception as e:
@@ -191,7 +192,7 @@ def close_position_partial_endpoint():
         return jsonify(
             {
                 "message": "Position partially closed successfully",
-                "result": result._asdict(),
+                "result": broker_clock.normalize_mt5_dict(result._asdict()),
             }
         )
 
@@ -240,7 +241,7 @@ def close_all_positions_endpoint():
         return jsonify(
             {
                 "message": f"Closed {len(results)} positions",
-                "results": [result._asdict() for result in results],
+                "results": [broker_clock.normalize_mt5_dict(result._asdict()) for result in results],
             }
         )
 
@@ -305,7 +306,7 @@ def modify_sl_tp_endpoint():
             return mt5_error_response("Modify SL/TP", result)
 
         return jsonify(
-            {"message": "SL/TP modified successfully", "result": result._asdict()}
+            {"message": "SL/TP modified successfully", "result": broker_clock.normalize_mt5_dict(result._asdict())}
         )
 
     except Exception as e:

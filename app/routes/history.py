@@ -256,16 +256,7 @@ def history_orders_get_endpoint():
         if orders is None:
             return not_found_response("orders history", ticket)
 
-        orders_list = []
-        for order in orders:
-            o = order._asdict()
-            for field in ("time_setup", "time_done", "time_expiration"):
-                if o.get(field) is not None:
-                    o[field] = broker_clock.to_real_utc(o[field])
-            for field in ("time_setup_msc", "time_done_msc"):
-                if o.get(field) is not None:
-                    o[field] = broker_clock.to_real_utc(o[field] // 1000) * 1000 + (o[field] % 1000)
-            orders_list.append(o)
+        orders_list = [broker_clock.normalize_mt5_dict(order._asdict()) for order in orders]
         return jsonify(orders_list)
 
     except Exception as e:

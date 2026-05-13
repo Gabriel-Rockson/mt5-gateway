@@ -155,7 +155,7 @@ def get_symbol_info(symbol):
         if symbol_info is None:
             return not_found_response("symbol info", symbol)
 
-        return jsonify(symbol_info._asdict())
+        return jsonify(broker_clock.normalize_mt5_dict(symbol_info._asdict()))
 
     except Exception as e:
         return internal_error_response("get_symbol_info", e)

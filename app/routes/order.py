@@ -3,6 +3,7 @@ import logging
 import os
 
 import MetaTrader5 as mt5
+from broker_clock import broker_clock
 from constants import ORDER_TYPE_TO_STRING, TRADE_ACTION_DEAL, TRADE_ACTION_PENDING
 from decorators import require_mt5_connection
 from errors import (
@@ -205,7 +206,8 @@ def send_market_order_endpoint():
         }
 
         if expiry_ts is not None:
-            request_data["expiration"] = int(expiry_ts)
+            # Caller passes real-UTC epoch; MT5 expects broker-wallclock-as-UTC.
+            request_data["expiration"] = broker_clock.from_real_utc(int(expiry_ts))
         if sl is not None:
             request_data["sl"] = sl
         if tp is not None:
@@ -245,7 +247,7 @@ def send_market_order_endpoint():
             f"[{request_id}] Order {action_str} successfully: {order_type_str}, symbol={data['symbol']}, volume={volume}, price={result.price}, order={result.order}, deal={result.deal}"
         )
 
-        result_dict = result._asdict()
+        result_dict = broker_clock.normalize_mt5_dict(result._asdict())
         return jsonify(
             {
                 "message": f"Order {action_str} successfully",
@@ -446,7 +448,7 @@ def order_check_endpoint():
                 }
             ), 400
 
-        return jsonify({"valid": True, **result._asdict()})
+        return jsonify({"valid": True, **broker_clock.normalize_mt5_dict(result._asdict())})
 
     except Exception as e:
         return internal_error_response("order_check", e)
@@ -746,7 +748,7 @@ def get_pending_orders():
 
         orders_list = []
         for order in orders:
-            order_dict = order._asdict()
+            order_dict = broker_clock.normalize_mt5_dict(order._asdict())
             order_dict["type_str"] = ORDER_TYPE_TO_STRING.get(
                 order.type, f"UNKNOWN_{order.type}"
             )
@@ -851,7 +853,7 @@ def cancel_order(ticket):
         logger.info(f"Order {ticket} cancelled successfully")
 
         return jsonify(
-            {"message": "Order cancelled successfully", "result": result._asdict()}
+            {"message": "Order cancelled successfully", "result": broker_clock.normalize_mt5_dict(result._asdict())}
         )
 
     except Exception as e:
@@ -1000,7 +1002,7 @@ def modify_order(ticket):
         )
 
         return jsonify(
-            {"message": "Order modified successfully", "result": result._asdict()}
+            {"message": "Order modified successfully", "result": broker_clock.normalize_mt5_dict(result._asdict())}
         )
 
     except Exception as e:
