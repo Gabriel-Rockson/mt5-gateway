@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import MetaTrader5 as mt5
 import pandas as pd
+from broker_clock import broker_clock
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
 
 logger = logging.getLogger(__name__)
@@ -189,7 +190,7 @@ def get_positions(magic=None):
             logger.error("Failed to retrieve positions.")
             return pd.DataFrame()
 
-        positions_data = [pos._asdict() for pos in positions]
+        positions_data = [broker_clock.normalize_mt5_dict(pos._asdict()) for pos in positions]
         positions_df = pd.DataFrame(positions_data)
 
         if magic is not None:
@@ -245,8 +246,8 @@ def get_deal_from_ticket(ticket):
     # Return the first deal (opening deal)
     target_deal = deals[0]
 
-    # Extract deal information
-    deal_dict = target_deal._asdict()
+    # Extract deal information (broker → real UTC)
+    deal_dict = broker_clock.normalize_mt5_dict(target_deal._asdict())
     deal_details = {
         "ticket": deal_dict["ticket"],
         "symbol": deal_dict["symbol"],
@@ -275,8 +276,8 @@ def get_order_from_ticket(ticket):
         logger.error(f"No order history found for ticket {ticket}")
         return None
 
-    # Convert order to a dictionary
-    order_dict = order[0]._asdict()
+    # Convert order to a dictionary (broker → real UTC)
+    order_dict = broker_clock.normalize_mt5_dict(order[0]._asdict())
 
     return order_dict
 

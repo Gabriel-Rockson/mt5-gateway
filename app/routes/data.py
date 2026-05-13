@@ -4,6 +4,7 @@ from datetime import datetime
 import MetaTrader5 as mt5
 import pandas as pd
 import pytz
+from broker_clock import broker_clock
 from decorators import require_mt5_connection
 from errors import internal_error_response, not_found_response, validation_error_response
 from flasgger import swag_from
@@ -90,7 +91,9 @@ def fetch_data_pos_endpoint():
             return not_found_response("rates data", symbol)
 
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        # MT5 emits broker-wallclock-as-UTC; vectorized convert → real UTC.
+        df['time'] = broker_clock.vectorized_to_real_utc(df['time'])
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         return jsonify(df.to_dict(orient='records'))
 
@@ -176,9 +179,14 @@ def fetch_data_range_endpoint():
         try:
             mt5_timeframe = get_timeframe(timeframe)
 
-            utc = pytz.UTC
-            start_date = utc.localize(datetime.fromisoformat(start_str.replace('Z', '+00:00')))
-            end_date = utc.localize(datetime.fromisoformat(end_str.replace('Z', '+00:00')))
+            # Caller passes real-UTC ISO timestamps. MT5's copy_rates_range expects
+            # broker-wallclock-as-UTC, so convert via broker_clock before calling.
+            start_real = int(datetime.fromisoformat(start_str.replace('Z', '+00:00')).timestamp())
+            end_real = int(datetime.fromisoformat(end_str.replace('Z', '+00:00')).timestamp())
+            start_broker = broker_clock.from_real_utc(start_real)
+            end_broker = broker_clock.from_real_utc(end_real)
+            start_date = datetime.fromtimestamp(start_broker, tz=pytz.UTC)
+            end_date = datetime.fromtimestamp(end_broker, tz=pytz.UTC)
         except ValueError as e:
             return validation_error_response(f"Invalid parameter format: {str(e)}")
 
@@ -190,7 +198,9 @@ def fetch_data_range_endpoint():
             return not_found_response("rates data", symbol)
 
         df = pd.DataFrame(rates)
-        df['time'] = pd.to_datetime(df['time'], unit='s').dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        # MT5 emits broker-wallclock-as-UTC; vectorized convert → real UTC.
+        df['time'] = broker_clock.vectorized_to_real_utc(df['time'])
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True).dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         return jsonify(df.to_dict(orient='records'))
 

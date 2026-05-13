@@ -2,6 +2,7 @@ import concurrent.futures
 import logging
 
 import MetaTrader5 as mt5
+from broker_clock import broker_clock
 from decorators import require_mt5_connection
 from errors import internal_error_response, not_found_response
 from flasgger import swag_from
@@ -109,7 +110,7 @@ def get_symbol_info_tick_endpoint(symbol):
         if tick is None:
             return not_found_response("symbol tick info", symbol)
 
-        return jsonify(tick._asdict())
+        return jsonify(broker_clock.normalize_mt5_dict(tick._asdict()))
 
     except Exception as e:
         return internal_error_response("get_symbol_info_tick", e)

@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 import MetaTrader5 as mt5
+from broker_clock import broker_clock
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
@@ -188,8 +189,10 @@ def history_deals_get_endpoint():
         if from_date >= to_date:
             return validation_error_response("from_date must be before to_date")
 
-        from_timestamp = int(from_date.timestamp())
-        to_timestamp = int(to_date.timestamp())
+        # Caller passes real-UTC. MT5 expects broker-wallclock-as-UTC for the
+        # search range, so convert before the call and back after.
+        from_timestamp = broker_clock.from_real_utc(int(from_date.timestamp()))
+        to_timestamp = broker_clock.from_real_utc(int(to_date.timestamp()))
         if position == 0:
             deals = mt5.history_deals_get(from_timestamp, to_timestamp)
         else:
@@ -198,7 +201,7 @@ def history_deals_get_endpoint():
         if deals is None:
             return not_found_response("deals history", position)
 
-        deals_list = [deal._asdict() for deal in deals]
+        deals_list = [broker_clock.normalize_mt5_dict(deal._asdict()) for deal in deals]
         return jsonify(deals_list)
 
     except Exception as e:
@@ -253,7 +256,16 @@ def history_orders_get_endpoint():
         if orders is None:
             return not_found_response("orders history", ticket)
 
-        orders_list = [order._asdict() for order in orders]
+        orders_list = []
+        for order in orders:
+            o = order._asdict()
+            for field in ("time_setup", "time_done", "time_expiration"):
+                if o.get(field) is not None:
+                    o[field] = broker_clock.to_real_utc(o[field])
+            for field in ("time_setup_msc", "time_done_msc"):
+                if o.get(field) is not None:
+                    o[field] = broker_clock.to_real_utc(o[field] // 1000) * 1000 + (o[field] % 1000)
+            orders_list.append(o)
         return jsonify(orders_list)
 
     except Exception as e:
