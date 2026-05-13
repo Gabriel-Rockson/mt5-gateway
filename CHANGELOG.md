@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.3.0...mt5-gateway-v1.4.0) (2026-05-13)
+
+
+### Features
+
+* **mt5-gateway:** auto-discover broker_clock probe symbol from catalog ([d78a7a5](https://github.com/Gabriel-Rockson/axiom/commit/d78a7a50d196deec2c953fa10f26872e10203b0a))
+* **mt5-gateway:** cover remaining endpoints in UTC translation sweep ([b6d89f2](https://github.com/Gabriel-Rockson/axiom/commit/b6d89f2d97df1645f9e374677240c799383c4e36))
+* **mt5-gateway:** env-pinned broker timezone + background probe ([132d1d7](https://github.com/Gabriel-Rockson/axiom/commit/132d1d7d43df9a5e70a65a3aef63b6c23f83b65a))
+* **mt5-gateway:** translate broker-local timestamps to real UTC at boundary ([caf715e](https://github.com/Gabriel-Rockson/axiom/commit/caf715e2db908c1f30c9e1ca40d129df85aa2fba))
+
+
+### Bug Fixes
+
+* **mt5-gateway:** make broker clock work on Python 3.9 + pandas 1.4 ([27b7bad](https://github.com/Gabriel-Rockson/axiom/commit/27b7bad1a40a007a66042bb050a27d7d431e483a))
+
 ## [1.3.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.2.1...mt5-gateway-v1.3.0) (2026-04-10)
 
 
