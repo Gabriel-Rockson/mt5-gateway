@@ -1,6 +1,7 @@
 import time
 
 import MetaTrader5 as mt5
+from broker_clock import broker_clock
 from flasgger import swag_from
 from flask import Blueprint, jsonify
 
@@ -96,6 +97,38 @@ def ready_check():
             "mt5_status": conn.get_status().value,
             "error": conn.get_last_error()
         }), 503
+
+
+@health_bp.route('/broker_clock')
+@swag_from({
+    'tags': ['Health'],
+    'responses': {
+        200: {
+            'description': 'Broker server clock state — the IANA timezone the gateway has '
+                           'identified for the broker server, and the corresponding signed '
+                           'UTC offset (seconds) at the current moment. Downstream consumers '
+                           "use this to know what 'Server time' means for this gateway."
+        }
+    }
+})
+def broker_clock_info():
+    """
+    Broker Clock State
+    ---
+    description: Returns the broker server's IANA timezone and current UTC offset.
+    """
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    tz_name = broker_clock.timezone
+    if tz_name == "UTC":
+        offset = 0
+    else:
+        off = ZoneInfo(tz_name).utcoffset(datetime.now(tz=timezone.utc))
+        offset = int(off.total_seconds()) if off is not None else 0
+    return jsonify({
+        "timezone": tz_name,
+        "offset_seconds": offset,
+    }), 200
 
 
 @health_bp.route('/health/live')
