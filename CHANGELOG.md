@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.4.0...mt5-gateway-v1.5.0) (2026-05-14)
+
+
+### Features
+
+* **axiom:** expose broker timezone via /broker_clock endpoint ([14aac8e](https://github.com/Gabriel-Rockson/axiom/commit/14aac8e1de9d8e45b1651a695aa53f0a8efd739d))
+
 ## [1.4.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.3.0...mt5-gateway-v1.4.0) (2026-05-13)
 
 
