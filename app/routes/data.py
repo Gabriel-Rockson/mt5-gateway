@@ -185,10 +185,21 @@ def fetch_data_range_endpoint():
         try:
             mt5_timeframe = get_timeframe(timeframe)
 
-            # Caller passes real-UTC ISO timestamps. MT5's copy_rates_range expects
-            # broker-wallclock-as-UTC, so convert via broker_clock before calling.
-            start_real = int(datetime.fromisoformat(start_str.replace('Z', '+00:00')).timestamp())
-            end_real = int(datetime.fromisoformat(end_str.replace('Z', '+00:00')).timestamp())
+            # Caller must pass real-UTC ISO timestamps with explicit timezone
+            # (RFC3339: trailing 'Z' or '+HH:MM'). Reject naive timestamps —
+            # silently treating them as UTC was a source of double-shift bugs
+            # when callers happened to pass broker-local or system-local time.
+            start_parsed = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+            end_parsed = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+            if start_parsed.tzinfo is None or end_parsed.tzinfo is None:
+                return validation_error_response(
+                    "start and end must include timezone (RFC3339); naive timestamps are rejected"
+                )
+
+            # MT5's copy_rates_range expects broker-wallclock-as-UTC, so
+            # convert via broker_clock before calling.
+            start_real = int(start_parsed.timestamp())
+            end_real = int(end_parsed.timestamp())
             start_broker = broker_clock.from_real_utc(start_real)
             end_broker = broker_clock.from_real_utc(end_real)
             start_date = datetime.fromtimestamp(start_broker, tz=pytz.UTC)
