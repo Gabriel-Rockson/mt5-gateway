@@ -68,7 +68,13 @@ def fetch_data_pos_endpoint():
     """
     Fetch Data from Position
     ---
-    description: Retrieve historical price data for a given symbol starting from a specific position.
+    description: |
+      Retrieve the most recent num_bars candles for a symbol.
+
+      CONTRACT: The LAST bar in the response is MT5 position 0 — the currently FORMING bar.
+      Its high/low/close update tick-by-tick until the next bar boundary. Callers that need
+      only completed bars must drop the last element. Reading the last bar for indicator
+      or signal logic is a lookahead bug.
     """
     try:
         symbol = request.args.get('symbol')
