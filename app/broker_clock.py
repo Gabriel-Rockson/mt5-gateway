@@ -103,18 +103,24 @@ class BrokerClock:
         self._lock = threading.Lock()
         # Empty string env var is the same as unset.
         self._env_timezone: Optional[str] = env_timezone or None
-        initial = self._env_timezone or "UTC"
-        self._timezone: str = initial
-        self._zone_obj: Optional[ZoneInfo] = None if initial == "UTC" else ZoneInfo(initial)
+        if not self._env_timezone:
+            # Without an env-pinned TZ, the broker clock would start as UTC and
+            # only correct itself ~5-15s later when the probe completes — every
+            # bar fetch in that window would be returned with the wrong
+            # timestamps (off by 2-3h for Athens-offset brokers). Refusing to
+            # start is safer than serving silently-wrong data.
+            raise RuntimeError(
+                "BROKER_TIMEZONE env var is required (e.g. 'Europe/Athens'). "
+                "Without it, the broker clock starts as UTC and any bar fetch "
+                "before the background probe completes returns wrong timestamps."
+            )
 
-        if self._env_timezone:
-            logger.info(
-                f"broker clock pinned to {self._env_timezone} via BROKER_TIMEZONE env var"
-            )
-        else:
-            logger.info(
-                "broker clock: no BROKER_TIMEZONE env set; will rely on background probe"
-            )
+        self._timezone: str = self._env_timezone
+        self._zone_obj: Optional[ZoneInfo] = None if self._env_timezone == "UTC" else ZoneInfo(self._env_timezone)
+
+        logger.info(
+            f"broker clock pinned to {self._env_timezone} via BROKER_TIMEZONE env var"
+        )
 
         # Background daemon thread keeps the timezone in sync without blocking requests.
         self._probe_thread = threading.Thread(
