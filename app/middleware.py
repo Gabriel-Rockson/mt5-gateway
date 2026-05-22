@@ -4,6 +4,8 @@ import uuid
 
 from flask import g, jsonify, request
 
+from mt5_connection import MT5Connection
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,3 +70,30 @@ class APIKeyMiddleware:
             response.status_code = 401
             return response
         return None
+
+
+class MT5SerializeMiddleware:
+    """Holds MT5Connection.api_lock for the lifetime of each request handler.
+
+    The MetaTrader5 Python module is not thread-safe and the gateway runs an
+    in-process broker_clock probe thread alongside the request handler thread.
+    Without serialization, the probe's mt5.symbol_info_tick() can interleave
+    with a request's mt5.order_send() and corrupt either's result. Health
+    probes are exempt — they don't touch MT5.
+    """
+
+    def __init__(self, app):
+        app.before_request(self.before_request)
+        app.teardown_request(self.teardown_request)
+
+    def before_request(self):
+        if request.path in _AUTH_EXEMPT_PATHS:
+            return None
+        MT5Connection.api_lock.acquire()
+        g.mt5_lock_held = True
+        return None
+
+    def teardown_request(self, exception=None):  # noqa: ARG002 — Flask signature
+        if getattr(g, 'mt5_lock_held', False):
+            MT5Connection.api_lock.release()
+            g.mt5_lock_held = False

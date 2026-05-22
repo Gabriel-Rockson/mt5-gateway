@@ -26,6 +26,8 @@ from zoneinfo import ZoneInfo
 
 import MetaTrader5 as mt5
 
+from mt5_connection import MT5Connection
+
 logger = logging.getLogger(__name__)
 
 # Brokers we've encountered or are likely to. If the probed offset matches one
@@ -61,7 +63,9 @@ def _find_probe_symbols() -> list:
     if env_sym:
         candidates.append(env_sym)
     try:
-        all_syms = mt5.symbols_get() or []
+        # mt5.symbols_get is not thread-safe — serialize against request handlers.
+        with MT5Connection.api_lock:
+            all_syms = mt5.symbols_get() or []
     except Exception as e:
         logger.warning(f"broker clock: symbols_get failed: {e}")
         return candidates
@@ -136,6 +140,9 @@ class BrokerClock:
             time.sleep(REFRESH_INTERVAL_S)
 
     def _probe_once(self) -> None:
+        # Acquire MT5Connection.api_lock around each mt5.* call so the probe
+        # never blocks a request handler for more than one quick call at a time
+        # (sleeps between calls run lock-free).
         candidates = _find_probe_symbols()
         if not candidates:
             logger.warning(
@@ -147,7 +154,8 @@ class BrokerClock:
         tick_time = 0
         for symbol in candidates[:MAX_PROBE_CANDIDATES]:
             try:
-                mt5.symbol_select(symbol, True)
+                with MT5Connection.api_lock:
+                    mt5.symbol_select(symbol, True)
             except Exception as e:
                 logger.debug(f"broker clock probe: symbol_select({symbol}) failed: {e}")
                 continue
@@ -155,7 +163,8 @@ class BrokerClock:
             deadline = time.time() + PER_CANDIDATE_POLL_S
             while time.time() < deadline:
                 try:
-                    tick = mt5.symbol_info_tick(symbol)
+                    with MT5Connection.api_lock:
+                        tick = mt5.symbol_info_tick(symbol)
                 except Exception:
                     tick = None
                 if tick is not None and getattr(tick, "time", 0):

@@ -9,7 +9,7 @@ from flasgger import Swagger
 from flask import Flask
 from flask_cors import CORS
 from logging_config import configure_logging
-from middleware import APIKeyMiddleware, RequestIDMiddleware
+from middleware import APIKeyMiddleware, MT5SerializeMiddleware, RequestIDMiddleware
 from mt5_connection import MT5Connection
 from routes.account import account_bp
 from routes.data import data_bp
@@ -34,6 +34,9 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers=["X-Request-ID"])
 RequestIDMiddleware(app)
 APIKeyMiddleware(app, Config.MT5_API_KEY)
+# Order matters: API key check (cheap, rejects unauth) runs before MT5 lock
+# acquisition (expensive, serializes against the broker_clock probe thread).
+MT5SerializeMiddleware(app)
 
 swagger = Swagger(app, config=swagger_config)
 

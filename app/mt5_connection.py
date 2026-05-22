@@ -21,6 +21,15 @@ class MT5Connection:
     _instance: Optional['MT5Connection'] = None
     _lock = Lock()
 
+    # Process-wide lock that MUST be held whenever any code calls into the
+    # MetaTrader5 module (mt5.*). The MT5 Python API maintains a single
+    # connection per process and is NOT thread-safe — concurrent calls corrupt
+    # the response buffer, mt5.last_error() returns the wrong thread's error,
+    # and mt5.initialize() during a reconnect can race with an in-flight
+    # order_send. Acquired by the Flask before_request hook around request
+    # handlers and by the broker_clock probe thread around its mt5 calls.
+    api_lock = Lock()
+
     def __init__(self):
         self._status = ConnectionStatus.DISCONNECTED
         self._last_error: Optional[str] = None
