@@ -3,12 +3,13 @@ import logging
 import os
 import signal
 
+from config import Config
 from dotenv import load_dotenv
 from flasgger import Swagger
 from flask import Flask
 from flask_cors import CORS
 from logging_config import configure_logging
-from middleware import RequestIDMiddleware
+from middleware import APIKeyMiddleware, RequestIDMiddleware
 from mt5_connection import MT5Connection
 from routes.account import account_bp
 from routes.data import data_bp
@@ -25,9 +26,14 @@ load_dotenv()
 configure_logging()
 logger = logging.getLogger(__name__)
 
+# Validate config eagerly — fails loudly on missing MT5_API_KEY rather than
+# silently starting a server with no authentication.
+Config.validate()
+
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers=["X-Request-ID"])
 RequestIDMiddleware(app)
+APIKeyMiddleware(app, Config.MT5_API_KEY)
 
 swagger = Swagger(app, config=swagger_config)
 

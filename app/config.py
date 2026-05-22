@@ -11,6 +11,11 @@ class Config:
 
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
 
+    # Shared secret required on the X-API-Key header for every request except
+    # /health/* probes. Required — startup fails loudly if not set. Generate
+    # with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    MT5_API_KEY = os.getenv('MT5_API_KEY', '')
+
     @classmethod
     def validate(cls):
         logger = logging.getLogger(__name__)
@@ -23,5 +28,16 @@ class Config:
 
         if cls.LOG_LEVEL not in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']:
             raise ValueError(f"Invalid LOG_LEVEL: {cls.LOG_LEVEL}")
+
+        if not cls.MT5_API_KEY:
+            raise ValueError(
+                "MT5_API_KEY env var is required — gateway exposes order placement and "
+                "account state; without it the API would be open to anyone who can reach "
+                "the port. Generate: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        if len(cls.MT5_API_KEY) < 32:
+            raise ValueError(
+                f"MT5_API_KEY is too short ({len(cls.MT5_API_KEY)} chars) — minimum 32"
+            )
 
         logger.info("Configuration validated successfully")
