@@ -276,7 +276,16 @@ def modify_sl_tp_endpoint():
     """
     Modify Stop Loss and Take Profit
     ---
-    description: Modify the Stop Loss (SL) and Take Profit (TP) levels for a specific position.
+    description: |
+      Modify the Stop Loss (SL) and Take Profit (TP) levels for a specific position.
+
+      Contract:
+        - If a field is omitted from the request body OR sent as null, the existing
+          broker-side value is preserved (we fetch the current position and reuse it).
+        - To explicitly REMOVE a stop, send the field with value 0.
+        - At least one of sl/tp must be present in the request.
+        - The position's symbol is fetched and included in the MT5 request — some
+          brokers reject TRADE_ACTION_SLTP requests without a symbol field.
     """
     try:
         data = request.get_json()
@@ -284,14 +293,44 @@ def modify_sl_tp_endpoint():
             return validation_error_response("Position data is required")
 
         position = data["position"]
+        sl_present = "sl" in data
+        tp_present = "tp" in data
         sl = data.get("sl")
         tp = data.get("tp")
 
+        if not sl_present and not tp_present:
+            return validation_error_response(
+                "at least one of 'sl' or 'tp' must be present in the request body"
+            )
+
+        # Preserve broker-side SL/TP when caller omits a field. Sending None/missing
+        # to MT5 silently removes the stop — this guard prevents accidental wipes.
+        if not sl_present or not tp_present or sl is None or tp is None:
+            existing = mt5.positions_get(ticket=position)
+            if existing is None or len(existing) == 0:
+                return validation_error_response(
+                    f"position {position} not found — cannot resolve existing SL/TP"
+                )
+            current = existing[0]
+            if not sl_present or sl is None:
+                sl = current.sl
+            if not tp_present or tp is None:
+                tp = current.tp
+            symbol = current.symbol
+        else:
+            existing = mt5.positions_get(ticket=position)
+            if existing is None or len(existing) == 0:
+                return validation_error_response(
+                    f"position {position} not found"
+                )
+            symbol = existing[0].symbol
+
         request_data = {
             "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": symbol,
             "position": position,
-            "sl": sl,
-            "tp": tp,
+            "sl": float(sl),
+            "tp": float(tp),
         }
 
         result = mt5.order_send(request_data)
