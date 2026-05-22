@@ -69,7 +69,20 @@ def send_market_order_endpoint():
         request_id = getattr(g, "request_id", "unknown")
         data = request.get_json()
 
-        logger.info(f"[{request_id}] Received order request: {json.dumps(data)}")
+        # Log a minimal summary instead of the full request body. The full
+        # body includes SL/TP/volume/magic which is fine internally but ends
+        # up in centralised log aggregators (Loki, CloudWatch) where it's
+        # queryable across boundaries the operator didn't anticipate.
+        if data:
+            logger.info(
+                f"[{request_id}] Received order request",
+                extra={
+                    "symbol": data.get("symbol"),
+                    "type": data.get("type"),
+                    "volume": data.get("volume"),
+                    "magic": data.get("magic"),
+                },
+            )
 
         if not data:
             return validation_error_response("Order data is required")

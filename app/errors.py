@@ -74,10 +74,14 @@ def internal_error_response(operation, exception):
     """
     request_id = _get_request_id()
 
+    # The exception is logged with full detail server-side (logger.exception
+    # below). The HTTP response only carries the exception class name —
+    # str(exception) commonly leaks file paths, internal variable values,
+    # and stack-context strings that don't belong in a response body.
     response = {
         "error": "Internal server error",
         "operation": operation,
-        "detail": str(exception)
+        "exception_type": type(exception).__name__,
     }
 
     if request_id:
