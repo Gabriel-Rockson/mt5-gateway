@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.5.0...mt5-gateway-v1.6.0) (2026-05-26)
+
+
+### Features
+
+* **mt5-gateway:** require X-API-Key header on non-health endpoints (CR-1) ([d2e278a](https://github.com/Gabriel-Rockson/axiom/commit/d2e278a912f4471ae88e46e6f6690f31268a4759))
+
+
+### Bug Fixes
+
+* **mt5-gateway:** drop full request body and str(exception) from logs/responses (AW-32, AW-33) ([540e7d4](https://github.com/Gabriel-Rockson/axiom/commit/540e7d416617596a32ac7761c225621261155dcf))
+* **mt5-gateway:** preserve existing SL/TP in modify_sl_tp; include symbol (CR-3) ([5966be4](https://github.com/Gabriel-Rockson/axiom/commit/5966be41a6838559288d906c0586364658992270))
+* **mt5-gateway:** require BROKER_TIMEZONE; remove UTC fallback (CR-20) ([59465b6](https://github.com/Gabriel-Rockson/axiom/commit/59465b62403bc74ee5bc4ca7c3aa4251262e10c4))
+* **mt5-gateway:** serialize MT5 API calls; drop waitress to single thread (CR-2) ([547659c](https://github.com/Gabriel-Rockson/axiom/commit/547659cba6c28c1244c2ce1be1e0eb6cd1ebb6f9))
+* use RFC3339 UTC for fetch_data_range; reject naive timestamps (CR-18) ([e513fb0](https://github.com/Gabriel-Rockson/axiom/commit/e513fb067861e8eb6338078e33ba8234e9fe0e4a))
+
 ## [1.5.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.4.0...mt5-gateway-v1.5.0) (2026-05-14)
 
 
