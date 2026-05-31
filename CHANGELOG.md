@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.0...mt5-gateway-v1.6.1) (2026-05-31)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** force deploy gateway ([b796bfe](https://github.com/Gabriel-Rockson/axiom/commit/b796bfe3a552c546c9f6f4940749915bb0e59525))
+
 ## [1.6.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.5.0...mt5-gateway-v1.6.0) (2026-05-26)
 
 
