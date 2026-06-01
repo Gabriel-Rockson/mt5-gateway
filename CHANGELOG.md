@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.2...mt5-gateway-v1.6.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** stop /health from calling MT5 outside the api_lock ([497db4a](https://github.com/Gabriel-Rockson/axiom/commit/497db4a288bd8e47ce2c94e8a9d03529529bcee1))
+
 ## [1.6.2](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.1...mt5-gateway-v1.6.2) (2026-06-01)
 
 
