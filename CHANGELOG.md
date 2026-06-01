@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.2](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.1...mt5-gateway-v1.6.2) (2026-06-01)
+
+
+### Performance Improvements
+
+* **mt5-gateway:** cache terminal_info, throttle liveness probe, memoize broker clock symbol ([49e2a9b](https://github.com/Gabriel-Rockson/axiom/commit/49e2a9b5460c8e0f335bba583873d81f380118ef))
+
 ## [1.6.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.0...mt5-gateway-v1.6.1) (2026-05-31)
 
 
