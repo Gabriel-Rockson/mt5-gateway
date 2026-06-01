@@ -33,6 +33,7 @@ class MT5Connection:
     def __init__(self):
         self._status = ConnectionStatus.DISCONNECTED
         self._last_error: Optional[str] = None
+        self._account_login: Optional[int] = None
         self._max_reconnect_attempts = int(os.getenv('MT5_RECONNECT_ATTEMPTS', '3'))
         self._base_delay = float(os.getenv('MT5_RECONNECT_BASE_DELAY', '1.0'))
         # ensure_connection() runs on every request and its liveness probe is an
@@ -71,6 +72,14 @@ class MT5Connection:
     def get_last_error(self) -> Optional[str]:
         return self._last_error
 
+    def get_account_login(self) -> Optional[int]:
+        """Last-known account login, cached at connection time.
+
+        Lets /health report the account without calling into the MetaTrader5
+        module — which it must not do, since it holds no api_lock.
+        """
+        return self._account_login
+
     def initialize(self) -> bool:
         attempt = 0
         while attempt < self._max_reconnect_attempts:
@@ -88,6 +97,7 @@ class MT5Connection:
                             "server": account_info.server,
                             "attempt": attempt
                         })
+                        self._account_login = account_info.login
                         self._set_status(ConnectionStatus.CONNECTED)
                         # account_info() above just confirmed liveness — seed the
                         # probe timestamp so the next request doesn't re-probe.
@@ -147,4 +157,5 @@ class MT5Connection:
             except Exception as e:
                 logger.error(f"Error during MT5 shutdown: {str(e)}")
             finally:
+                self._account_login = None
                 self._set_status(ConnectionStatus.DISCONNECTED)

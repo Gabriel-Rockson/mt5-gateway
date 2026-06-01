@@ -1,6 +1,5 @@
 import time
 
-import MetaTrader5 as mt5
 from broker_clock import broker_clock
 from flasgger import swag_from
 from flask import Blueprint, jsonify
@@ -33,29 +32,17 @@ def health_check():
     conn = MT5Connection.get_instance()
     uptime = time.time() - _start_time
 
+    # Answer from cached connection state only. /health is exempt from the MT5
+    # serialization middleware (it holds no api_lock), so calling into the
+    # non-thread-safe MetaTrader5 module here would race the broker_clock probe
+    # thread and in-flight order_send calls. The login is cached at connect time.
     response = {
         "status": "healthy",
         "mt5_status": conn.get_status().value,
-        "uptime_seconds": round(uptime, 2)
+        "uptime_seconds": round(uptime, 2),
+        "mt5_account": conn.get_account_login() if conn.is_connected() else None,
+        "last_error": conn.get_last_error(),
     }
-
-    if conn.is_connected():
-        try:
-            account_info = mt5.account_info()
-            if account_info:
-                response["mt5_account"] = account_info.login
-            else:
-                response["mt5_account"] = None
-        except Exception:
-            response["mt5_account"] = None
-    else:
-        response["mt5_account"] = None
-
-    last_error = conn.get_last_error()
-    if last_error:
-        response["last_error"] = last_error
-    else:
-        response["last_error"] = None
 
     return jsonify(response), 200
 
