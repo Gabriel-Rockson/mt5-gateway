@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.3...mt5-gateway-v1.7.0) (2026-06-01)
+
+
+### Features
+
+* **mt5-gateway:** add /state snapshot endpoint and cut per-request IPC ([0d795f3](https://github.com/Gabriel-Rockson/axiom/commit/0d795f3869d8335eeae72969778ddb8dc2ba56a0))
+
 ## [1.6.3](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.2...mt5-gateway-v1.6.3) (2026-06-01)
 
 
