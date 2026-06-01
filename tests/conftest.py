@@ -40,8 +40,13 @@ if str(APP_DIR) not in sys.path:
 
 @pytest.fixture(autouse=True)
 def _reset_fake_mt5():
-    """Each test starts from clean default MT5 behavior."""
+    """Each test starts from clean default MT5 behavior and empty caches."""
     fake_mt5.reset()
+    import lib
+    from routes.account import reset_terminal_cache
+
+    lib.reset_symbol_caches()
+    reset_terminal_cache()
     yield
 
 

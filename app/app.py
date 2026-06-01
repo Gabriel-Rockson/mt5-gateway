@@ -18,6 +18,7 @@ from routes.health import health_bp
 from routes.history import history_bp
 from routes.order import order_bp
 from routes.position import position_bp
+from routes.state import state_bp
 from routes.symbol import symbol_bp
 from swagger import swagger_config
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -46,6 +47,7 @@ app.register_blueprint(data_bp)
 app.register_blueprint(position_bp)
 app.register_blueprint(order_bp)
 app.register_blueprint(account_bp)
+app.register_blueprint(state_bp)
 app.register_blueprint(history_bp)
 app.register_blueprint(error_bp)
 

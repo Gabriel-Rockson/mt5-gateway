@@ -103,6 +103,16 @@ class MT5Connection:
                         # probe timestamp so the next request doesn't re-probe.
                         self._last_liveness_ok = time.monotonic()
 
+                        # A fresh session's symbol state and terminal flags may
+                        # differ from what the caches assumed; drop them so the
+                        # next call re-selects and re-fetches. Imported lazily to
+                        # avoid an import cycle (lib -> broker_clock ->
+                        # mt5_connection).
+                        from lib import reset_symbol_caches
+                        from routes.account import reset_terminal_cache
+                        reset_symbol_caches()
+                        reset_terminal_cache()
+
                         enable_algo_trading()
 
                         return True

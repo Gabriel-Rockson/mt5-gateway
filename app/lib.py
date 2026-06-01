@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import MetaTrader5 as mt5
@@ -7,6 +9,55 @@ from broker_clock import broker_clock
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
 
 logger = logging.getLogger(__name__)
+
+# A symbol's selection state in Market Watch and its contract spec (volume
+# limits, step, filling mode, freeze level) are static within a session, yet
+# every order placement and position close re-fetches them — each an MT5 IPC
+# call (~5-15ms through Wine) under api_lock. Cache them with short TTLs. The
+# refresh paths run while the caller holds MT5Connection.api_lock, but the
+# caches carry their own locks so they stay correct once that lock is narrowed.
+_SYMBOL_SELECT_TTL_S = 60
+_symbol_select_cache_lock = threading.Lock()
+_symbol_select_ok: dict = {}  # symbol -> monotonic ts of last successful select
+
+_SYMBOL_INFO_TTL_S = 300
+_symbol_info_cache_lock = threading.Lock()
+_symbol_info_cache: dict = {}  # symbol -> (monotonic ts, SymbolInfo)
+
+
+def _cached_symbol_info(symbol_name):
+    """Return mt5.symbol_info(symbol), cached with a short TTL.
+
+    Contract specs are static within a session. Returns None when MT5 reports
+    no info (negatives are not cached, so a symbol that appears later is picked
+    up on the next call).
+    """
+    now = time.monotonic()
+    with _symbol_info_cache_lock:
+        entry = _symbol_info_cache.get(symbol_name)
+        if entry is not None and now - entry[0] < _SYMBOL_INFO_TTL_S:
+            return entry[1]
+
+    info = mt5.symbol_info(symbol_name)
+    if info is None:
+        return None
+
+    with _symbol_info_cache_lock:
+        _symbol_info_cache[symbol_name] = (now, info)
+    return info
+
+
+def reset_symbol_caches():
+    """Drop the symbol select/info caches.
+
+    Called when the MT5 session is (re-)established: a reconnect can leave the
+    select cache asserting a symbol is in Market Watch when the fresh session
+    has not selected it, so time-based expiry alone is not enough.
+    """
+    with _symbol_select_cache_lock:
+        _symbol_select_ok.clear()
+    with _symbol_info_cache_lock:
+        _symbol_info_cache.clear()
 
 
 def get_timeframe(timeframe_str: str) -> MT5Timeframe:
@@ -24,10 +75,22 @@ def validate_symbol(symbol_name):
     Checks if a symbol exists and is selected in Market Watch.
     If not selected, attempts to select it.
     Returns True if valid/selected, False otherwise.
+
+    A successful select is cached for a short TTL — selection state is static
+    within a session, so re-selecting on every call only burns an IPC. If a
+    symbol is dropped within the TTL, the next tick/order call surfaces it.
     """
+    now = time.monotonic()
+    with _symbol_select_cache_lock:
+        if now - _symbol_select_ok.get(symbol_name, 0.0) < _SYMBOL_SELECT_TTL_S:
+            return True
+
     if not mt5.symbol_select(symbol_name, True):
         logger.error(f"Failed to select symbol: {symbol_name}")
         return False
+
+    with _symbol_select_cache_lock:
+        _symbol_select_ok[symbol_name] = now
     return True
 
 
@@ -38,7 +101,7 @@ def get_symbol_filling_mode(symbol_name):
 
     Note: ORDER_FILLING_FOK has value 0 which MT5 rejects, so prioritize IOC
     """
-    symbol_info = mt5.symbol_info(symbol_name)
+    symbol_info = _cached_symbol_info(symbol_name)
     if symbol_info is None:
         logger.error(f"Failed to get symbol info for: {symbol_name}")
         return mt5.ORDER_FILLING_RETURN
@@ -137,67 +200,53 @@ def close_position(position, deviation=20, magic=0, comment=""):
 def close_all_positions(order_type="all", magic=None):
     order_type_dict = {"BUY": mt5.ORDER_TYPE_BUY, "SELL": mt5.ORDER_TYPE_SELL}
 
-    total_positions = mt5.positions_total()
-    if total_positions is not None and total_positions > 0:
-        positions = mt5.positions_get()
-        if positions is None:
-            logger.error("Failed to retrieve positions.")
-            return []
+    positions = mt5.positions_get()
+    if positions is None:
+        logger.error("Failed to retrieve positions.")
+        return []
 
-        positions_data = [pos._asdict() for pos in positions]
-        positions_df = pd.DataFrame(positions_data)
-
-        if magic is not None:
-            positions_df = positions_df[positions_df["magic"] == magic]
-
-        if order_type != "all":
-            if order_type not in order_type_dict:
-                logger.error(
-                    f"Invalid order_type: {order_type}. Must be 'BUY', 'SELL', or 'all'."
-                )
-                return []
-            positions_df = positions_df[
-                positions_df["type"] == order_type_dict[order_type]
-            ]
-
-        if positions_df.empty:
-            logger.error("No open positions matching the criteria.")
-            return []
-
-        results = []
-        for _, position in positions_df.iterrows():
-            order_result = close_position(position)
-            if order_result:
-                results.append(order_result)
-            else:
-                logger.error(f"Failed to close position {position['ticket']}.")
-
-        return results
-    else:
+    if len(positions) == 0:
         logger.error("No open positions to close.")
         return []
 
+    positions_data = [pos._asdict() for pos in positions]
+    positions_df = pd.DataFrame(positions_data)
+
+    if magic is not None:
+        positions_df = positions_df[positions_df["magic"] == magic]
+
+    if order_type != "all":
+        if order_type not in order_type_dict:
+            logger.error(
+                f"Invalid order_type: {order_type}. Must be 'BUY', 'SELL', or 'all'."
+            )
+            return []
+        positions_df = positions_df[
+            positions_df["type"] == order_type_dict[order_type]
+        ]
+
+    if positions_df.empty:
+        logger.error("No open positions matching the criteria.")
+        return []
+
+    results = []
+    for _, position in positions_df.iterrows():
+        order_result = close_position(position)
+        if order_result:
+            results.append(order_result)
+        else:
+            logger.error(f"Failed to close position {position['ticket']}.")
+
+    return results
+
 
 def get_positions(magic=None):
-    total_positions = mt5.positions_total()
-    if total_positions is None:
-        logger.error("Failed to get positions total.")
+    positions = mt5.positions_get()
+    if positions is None:
+        logger.error("Failed to retrieve positions.")
         return pd.DataFrame()
 
-    if total_positions > 0:
-        positions = mt5.positions_get()
-        if positions is None:
-            logger.error("Failed to retrieve positions.")
-            return pd.DataFrame()
-
-        positions_data = [broker_clock.normalize_mt5_dict(pos._asdict()) for pos in positions]
-        positions_df = pd.DataFrame(positions_data)
-
-        if magic is not None:
-            positions_df = positions_df[positions_df["magic"] == magic]
-
-        return positions_df
-    else:
+    if len(positions) == 0:
         return pd.DataFrame(
             columns=[
                 "ticket",
@@ -221,6 +270,14 @@ def get_positions(magic=None):
                 "external_id",
             ]
         )
+
+    positions_data = [broker_clock.normalize_mt5_dict(pos._asdict()) for pos in positions]
+    positions_df = pd.DataFrame(positions_data)
+
+    if magic is not None:
+        positions_df = positions_df[positions_df["magic"] == magic]
+
+    return positions_df
 
 
 def get_deal_from_ticket(ticket):
@@ -287,7 +344,7 @@ def validate_volume(symbol, volume):
     Validate volume against symbol constraints.
     Returns (True, None) if valid, (False, error_message) if invalid.
     """
-    symbol_info = mt5.symbol_info(symbol)
+    symbol_info = _cached_symbol_info(symbol)
     if symbol_info is None:
         return False, "Symbol info unavailable"
 
@@ -350,7 +407,7 @@ def validate_pending_price(order_type, symbol, price):
     if tick is None:
         return False, "Unable to get current price"
 
-    symbol_info = mt5.symbol_info(symbol)
+    symbol_info = _cached_symbol_info(symbol)
     if symbol_info is None:
         return False, "Symbol info unavailable"
 

@@ -1,4 +1,3 @@
-import concurrent.futures
 import logging
 
 import MetaTrader5 as mt5
@@ -50,14 +49,13 @@ def get_symbols_endpoint():
     try:
         search = request.args.get('search', '*')
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(mt5.symbols_get, group=search)
-            try:
-                symbols = future.result(timeout=8)
-            except concurrent.futures.TimeoutError:
-                logger.error("symbols_get timed out after 8 seconds - MT5 may be reinitialising")
-                return jsonify({"error": "MT5 symbols_get timed out"}), 503
-
+        # symbols_get runs under the request's api_lock (the serialize
+        # middleware holds it for this handler), so it is already serialized
+        # against the broker-clock probe and other requests. A prior
+        # ThreadPoolExecutor "timeout" here was illusory — the executor's
+        # context manager blocked on shutdown until symbols_get returned, so
+        # the lock stayed held for the full call regardless of the 503.
+        symbols = mt5.symbols_get(group=search)
         if symbols is None:
             return jsonify({"error": "MT5 symbols_get returned None"}), 503
 

@@ -42,6 +42,18 @@ def _get_terminal_trade_allowed() -> bool:
         _terminal_cache_ts = now
     return allowed
 
+
+def reset_terminal_cache():
+    """Drop the cached terminal_info().trade_allowed value.
+
+    Called on reconnect (a fresh session may report differently) and between
+    tests for isolation.
+    """
+    global _terminal_trade_allowed, _terminal_cache_ts
+    with _terminal_cache_lock:
+        _terminal_trade_allowed = False
+        _terminal_cache_ts = 0.0
+
 @account_bp.route('/account', methods=['GET'])
 @require_mt5_connection
 @swag_from({

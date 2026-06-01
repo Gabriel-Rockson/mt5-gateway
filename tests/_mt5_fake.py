@@ -65,6 +65,7 @@ class FakeMT5:
         self.account_info = MagicMock(
             return_value=Struct(login=5000123, server="Demo-Server")
         )
+        self.terminal_info = MagicMock(return_value=Struct(trade_allowed=True))
         self.symbol_select = MagicMock(return_value=True)
         self.symbol_info = MagicMock(return_value=self.default_symbol_info())
         self.symbol_info_tick = MagicMock(
@@ -82,6 +83,7 @@ class FakeMT5:
         )
         self.positions_get = MagicMock(return_value=[])
         self.positions_total = MagicMock(return_value=0)
+        self.orders_get = MagicMock(return_value=[])
         self.symbols_get = MagicMock(return_value=[])
         self.history_deals_get = MagicMock(return_value=[])
         self.history_orders_get = MagicMock(return_value=[])
