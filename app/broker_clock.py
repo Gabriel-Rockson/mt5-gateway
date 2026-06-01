@@ -118,6 +118,12 @@ class BrokerClock:
         self._timezone: str = self._env_timezone
         self._zone_obj: Optional[ZoneInfo] = None if self._env_timezone == "UTC" else ZoneInfo(self._env_timezone)
 
+        # Symbol that last produced a tick. Reused across probes so the steady
+        # state doesn't re-run the ~90ms symbols_get() catalog enumeration (held
+        # under api_lock) every cycle — only rediscovers if the cached symbol
+        # stops ticking.
+        self._cached_probe_symbol: Optional[str] = None
+
         logger.info(
             f"broker clock pinned to {self._env_timezone} via BROKER_TIMEZONE env var"
         )
@@ -145,19 +151,14 @@ class BrokerClock:
                 logger.warning(f"broker clock probe loop error: {e}")
             time.sleep(REFRESH_INTERVAL_S)
 
-    def _probe_once(self) -> None:
-        # Acquire MT5Connection.api_lock around each mt5.* call so the probe
-        # never blocks a request handler for more than one quick call at a time
-        # (sleeps between calls run lock-free).
-        candidates = _find_probe_symbols()
-        if not candidates:
-            logger.warning(
-                "broker clock probe: no usable symbol found in broker's symbols_get() catalog"
-            )
-            return
+    def _poll_candidates_for_tick(self, candidates: list) -> tuple:
+        """Poll candidates until one yields a tick.
 
-        used_symbol = None
-        tick_time = 0
+        Acquires MT5Connection.api_lock around each mt5.* call so the probe never
+        blocks a request handler for more than one quick call at a time (the
+        sleeps between calls run lock-free). Returns (used_symbol, tick_time);
+        tick_time is 0 if no candidate responded.
+        """
         for symbol in candidates[:MAX_PROBE_CANDIDATES]:
             try:
                 with MT5Connection.api_lock:
@@ -174,18 +175,32 @@ class BrokerClock:
                 except Exception:
                     tick = None
                 if tick is not None and getattr(tick, "time", 0):
-                    tick_time = int(tick.time)
-                    used_symbol = symbol
-                    break
+                    return symbol, int(tick.time)
                 time.sleep(PER_CANDIDATE_INTERVAL_S)
-            if tick_time:
-                break
+        return None, 0
+
+    def _probe_once(self) -> None:
+        # Try the symbol that worked last time first — a single cheap tick read
+        # instead of re-enumerating the broker's full symbols_get() catalog.
+        used_symbol, tick_time = None, 0
+        if self._cached_probe_symbol:
+            used_symbol, tick_time = self._poll_candidates_for_tick([self._cached_probe_symbol])
 
         if not tick_time:
-            logger.warning(
-                f"broker clock probe: no tick from any of {candidates[:MAX_PROBE_CANDIDATES]}"
-            )
+            # First probe, or the cached symbol went quiet — (re)discover from the catalog.
+            candidates = _find_probe_symbols()
+            if not candidates:
+                logger.warning(
+                    "broker clock probe: no usable symbol found in broker's symbols_get() catalog"
+                )
+                return
+            used_symbol, tick_time = self._poll_candidates_for_tick(candidates)
+
+        if not tick_time:
+            logger.warning("broker clock probe: no tick from any candidate symbol")
             return
+
+        self._cached_probe_symbol = used_symbol
 
         # Snap to 15-min grid to absorb network jitter.
         offset = round((tick_time - int(time.time())) / 900) * 900

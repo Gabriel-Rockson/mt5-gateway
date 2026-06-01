@@ -35,6 +35,12 @@ class MT5Connection:
         self._last_error: Optional[str] = None
         self._max_reconnect_attempts = int(os.getenv('MT5_RECONNECT_ATTEMPTS', '3'))
         self._base_delay = float(os.getenv('MT5_RECONNECT_BASE_DELAY', '1.0'))
+        # ensure_connection() runs on every request and its liveness probe is an
+        # MT5 IPC call. Re-probing at most this often (rather than per request)
+        # removes that call from the common path; handlers still detect a silent
+        # drop via their own null-checks and return 503.
+        self._liveness_probe_interval = float(os.getenv('MT5_LIVENESS_PROBE_INTERVAL', '15.0'))
+        self._last_liveness_ok = 0.0
 
     @classmethod
     def get_instance(cls) -> 'MT5Connection':
@@ -83,6 +89,9 @@ class MT5Connection:
                             "attempt": attempt
                         })
                         self._set_status(ConnectionStatus.CONNECTED)
+                        # account_info() above just confirmed liveness — seed the
+                        # probe timestamp so the next request doesn't re-probe.
+                        self._last_liveness_ok = time.monotonic()
 
                         enable_algo_trading()
 
@@ -110,9 +119,15 @@ class MT5Connection:
 
     def ensure_connection(self) -> bool:
         if self.is_connected():
+            # Skip the IPC liveness probe when we confirmed the connection
+            # recently — trust the cached CONNECTED status until the interval
+            # elapses.
+            if time.monotonic() - self._last_liveness_ok < self._liveness_probe_interval:
+                return True
             try:
                 account_info = mt5.account_info()
                 if account_info is not None:
+                    self._last_liveness_ok = time.monotonic()
                     return True
                 else:
                     logger.warning("MT5 connection lost, account_info returned None")
