@@ -1,0 +1,29 @@
+[project]
+name = "mt5-gateway"
+version = "0.1.0"
+description = "HTTP API wrapper around MetaTrader 5"
+requires-python = ">=3.9"
+
+# Runtime deps live in app/requirements.txt (installed into the Wine Python at
+# build time). This file exists for test tooling only — the MetaTrader5 package
+# is Windows-only, so tests run against a fake injected in tests/conftest.py.
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "flask",
+    "flask-cors",
+    "flasgger",
+    "python-dotenv",
+    "python-json-logger",
+    "pandas",
+    "numpy",
+    "pytz",
+    "tzdata",
+    "waitress",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["app"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]
