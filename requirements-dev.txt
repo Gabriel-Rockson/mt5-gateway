@@ -1,0 +1,15 @@
+# Test-only dependencies. The runtime deps in app/requirements.txt are pinned to
+# old versions for the Wine Python 3.9 runtime and include MetaTrader5 (Windows
+# only); tests run on a modern Python with MetaTrader5 faked in tests/conftest.py,
+# so they install this list instead.
+pytest
+flask
+flask-cors
+flasgger
+python-dotenv
+python-json-logger
+pandas
+numpy
+pytz
+tzdata
+waitress
