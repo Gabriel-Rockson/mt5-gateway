@@ -1,7 +1,7 @@
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import MetaTrader5 as mt5
 import pandas as pd
@@ -221,9 +221,7 @@ def close_all_positions(order_type="all", magic=None):
                 f"Invalid order_type: {order_type}. Must be 'BUY', 'SELL', or 'all'."
             )
             return []
-        positions_df = positions_df[
-            positions_df["type"] == order_type_dict[order_type]
-        ]
+        positions_df = positions_df[positions_df["type"] == order_type_dict[order_type]]
 
     if positions_df.empty:
         logger.error("No open positions matching the criteria.")
@@ -271,7 +269,9 @@ def get_positions(magic=None):
             ]
         )
 
-    positions_data = [broker_clock.normalize_mt5_dict(pos._asdict()) for pos in positions]
+    positions_data = [
+        broker_clock.normalize_mt5_dict(pos._asdict()) for pos in positions
+    ]
     positions_df = pd.DataFrame(positions_data)
 
     if magic is not None:
@@ -310,8 +310,12 @@ def get_deal_from_ticket(ticket):
         "symbol": deal_dict["symbol"],
         "type": "BUY" if deal_dict["type"] == 0 else "SELL",
         "volume": deal_dict["volume"],
-        "open_time": datetime.fromtimestamp(deal_dict["time"], tz=timezone.utc).isoformat(),
-        "close_time": datetime.fromtimestamp(deal_dict["time"], tz=timezone.utc).isoformat(),
+        "open_time": datetime.fromtimestamp(
+            deal_dict["time"], tz=timezone.utc
+        ).isoformat(),
+        "close_time": datetime.fromtimestamp(
+            deal_dict["time"], tz=timezone.utc
+        ).isoformat(),
         "open_price": deal_dict["price"],
         "close_price": deal_dict["price"],
         "profit": deal_dict["profit"],
@@ -449,10 +453,15 @@ def validate_type_filling(type_filling_input):
     if isinstance(type_filling_input, str):
         type_filling_str = type_filling_input.upper()
         if type_filling_str not in TYPE_FILLING_MAP:
-            return None, f"Invalid type_filling: {type_filling_input}. Must be one of: FOK, IOC, RETURN"
+            return (
+                None,
+                f"Invalid type_filling: {type_filling_input}. Must be one of: FOK, IOC, RETURN",
+            )
         return TYPE_FILLING_MAP[type_filling_str], None
     elif isinstance(type_filling_input, int):
         return type_filling_input, None
     else:
-        return None, "type_filling must be a string (FOK, IOC, RETURN) or integer constant"
-
+        return (
+            None,
+            "type_filling must be a string (FOK, IOC, RETURN) or integer constant",
+        )
