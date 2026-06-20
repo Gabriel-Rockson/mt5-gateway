@@ -300,28 +300,38 @@ def get_deal_from_ticket(ticket):
         logger.error(f"No deals found for position ticket {ticket}")
         return None
 
-    # Return the first deal (opening deal)
-    target_deal = deals[0]
+    # A closed position has an entry deal and one or more exit deals. The entry
+    # carries the open price/time; the exit carries the realized profit, swap and
+    # close price/time. Pair them so the result reflects the round trip rather
+    # than just the first (opening) deal — which had profit≈0 and no close info.
+    normalized = [broker_clock.normalize_mt5_dict(d._asdict()) for d in deals]
+    entry = next((d for d in normalized if d.get("entry") == 0), normalized[0])
+    # DEAL_ENTRY_OUT == 1, DEAL_ENTRY_OUT_BY == 3 both close a position. Take the
+    # latest exit so a partially-then-fully closed position reports the final close.
+    exits = [d for d in normalized if d.get("entry") in (1, 3)]
+    exit_deal = max(exits, key=lambda d: d.get("time", 0)) if exits else None
 
-    # Extract deal information (broker → real UTC)
-    deal_dict = broker_clock.normalize_mt5_dict(target_deal._asdict())
+    realized = exit_deal if exit_deal is not None else entry
     deal_details = {
-        "ticket": deal_dict["ticket"],
-        "symbol": deal_dict["symbol"],
-        "type": "BUY" if deal_dict["type"] == 0 else "SELL",
-        "volume": deal_dict["volume"],
+        "ticket": entry["ticket"],
+        "position_id": entry.get("position_id", ticket),
+        "symbol": entry["symbol"],
+        "type": "BUY" if entry["type"] == 0 else "SELL",
+        "volume": entry["volume"],
         "open_time": datetime.fromtimestamp(
-            deal_dict["time"], tz=timezone.utc
+            entry["time"], tz=timezone.utc
         ).isoformat(),
         "close_time": datetime.fromtimestamp(
-            deal_dict["time"], tz=timezone.utc
+            realized["time"], tz=timezone.utc
         ).isoformat(),
-        "open_price": deal_dict["price"],
-        "close_price": deal_dict["price"],
-        "profit": deal_dict["profit"],
-        "commission": deal_dict["commission"],
-        "swap": deal_dict["swap"],
-        "comment": deal_dict["comment"],
+        "open_price": entry["price"],
+        "close_price": realized["price"],
+        # Profit/swap/commission sum across all deals of the round trip so a
+        # multi-deal close reports the total realized P&L.
+        "profit": sum(d.get("profit", 0) for d in normalized),
+        "commission": sum(d.get("commission", 0) for d in normalized),
+        "swap": sum(d.get("swap", 0) for d in normalized),
+        "comment": realized.get("comment", entry.get("comment", "")),
     }
     return deal_details
 
