@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.7.0...mt5-gateway-v1.7.1) (2026-06-21)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** pair entry/exit deals so get_deal_from_ticket reports realized P&L ([3506c89](https://github.com/Gabriel-Rockson/axiom/commit/3506c8927cad3ad0bbf1b0acb0c9fdd1fda34741))
+
 ## [1.7.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.6.3...mt5-gateway-v1.7.0) (2026-06-01)
 
 
