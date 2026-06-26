@@ -37,6 +37,17 @@ class TestAPIKeyAuth:
             resp = client.get(path)
             assert resp.status_code != 401, path
 
+    def test_apidocs_paths_exempt(self, client):
+        # The docs and their assets describe the API but expose no account
+        # state, so they must be reachable without the X-API-Key header.
+        for path in (
+            "/apidocs/",
+            "/apispec_1.json",
+            "/flasgger_static/swagger-ui.css",
+        ):
+            resp = client.get(path)
+            assert resp.status_code != 401, path
+
 
 class TestRequestID:
     def test_response_carries_request_id(self, client):

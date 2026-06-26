@@ -33,6 +33,22 @@ _AUTH_EXEMPT_PATHS = frozenset({
     '/health/live',
 })
 
+# The Swagger UI and its spec describe the API but expose no account state or
+# trading actions, so they're public — the protection belongs on the API
+# routes. The UI page lives under /apidocs/, fetches its spec from
+# /apispec_1.json, and loads its assets from /flasgger_static/ (prefix match).
+_AUTH_EXEMPT_PREFIXES = (
+    '/apidocs',
+    '/apispec_1.json',
+    '/flasgger_static/',
+)
+
+
+def _is_auth_exempt(path: str) -> bool:
+    if path in _AUTH_EXEMPT_PATHS:
+        return True
+    return any(path.startswith(prefix) for prefix in _AUTH_EXEMPT_PREFIXES)
+
 
 class APIKeyMiddleware:
     """Enforces a shared-secret X-API-Key header on every request.
@@ -51,7 +67,7 @@ class APIKeyMiddleware:
         app.before_request(self.before_request)
 
     def before_request(self):
-        if request.path in _AUTH_EXEMPT_PATHS:
+        if _is_auth_exempt(request.path):
             return None
 
         provided = request.headers.get('X-API-Key', '')
@@ -79,7 +95,7 @@ class MT5SerializeMiddleware:
     in-process broker_clock probe thread alongside the request handler thread.
     Without serialization, the probe's mt5.symbol_info_tick() can interleave
     with a request's mt5.order_send() and corrupt either's result. Health
-    probes are exempt — they don't touch MT5.
+    probes and the API docs are exempt — they don't touch MT5.
     """
 
     def __init__(self, app):
@@ -87,7 +103,7 @@ class MT5SerializeMiddleware:
         app.teardown_request(self.teardown_request)
 
     def before_request(self):
-        if request.path in _AUTH_EXEMPT_PATHS:
+        if _is_auth_exempt(request.path):
             return None
         MT5Connection.api_lock.acquire()
         g.mt5_lock_held = True
