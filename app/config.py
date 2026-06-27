@@ -16,6 +16,17 @@ class Config:
     # with: python -c "import secrets; print(secrets.token_urlsafe(32))"
     MT5_API_KEY = os.getenv('MT5_API_KEY', '')
 
+    # Optional HTTP Basic credentials for the API docs (/apidocs). The docs are
+    # exempt from the X-API-Key check; set both to put a browser login in front
+    # of them. Leave both unset to keep the docs public. Setting only one is a
+    # misconfiguration and fails validation.
+    MT5_DOCS_USER = os.getenv('MT5_DOCS_USER', '')
+    MT5_DOCS_PASSWORD = os.getenv('MT5_DOCS_PASSWORD', '')
+
+    @classmethod
+    def docs_auth_enabled(cls) -> bool:
+        return bool(cls.MT5_DOCS_USER and cls.MT5_DOCS_PASSWORD)
+
     @classmethod
     def validate(cls):
         logger = logging.getLogger(__name__)
@@ -38,6 +49,18 @@ class Config:
         if len(cls.MT5_API_KEY) < 32:
             raise ValueError(
                 f"MT5_API_KEY is too short ({len(cls.MT5_API_KEY)} chars) — minimum 32"
+            )
+
+        if bool(cls.MT5_DOCS_USER) != bool(cls.MT5_DOCS_PASSWORD):
+            raise ValueError(
+                "MT5_DOCS_USER and MT5_DOCS_PASSWORD must be set together — set both "
+                "to password-protect /apidocs, or neither to leave the docs public"
+            )
+
+        if not cls.docs_auth_enabled():
+            logger.warning(
+                "API docs (/apidocs) are public — set MT5_DOCS_USER and "
+                "MT5_DOCS_PASSWORD to require a login"
             )
 
         logger.info("Configuration validated successfully")

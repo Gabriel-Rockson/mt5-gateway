@@ -13,7 +13,7 @@ swagger_config = {
     "basePath": "/",
     "schemes": schemes,
     "securityDefinitions": {
-        "ApiKeyAuth": {"type": "apiKey", "name": "Authorization", "in": "header"}
+        "ApiKeyAuth": {"type": "apiKey", "name": "X-API-Key", "in": "header"}
     },
     "definitions": {
         "OrderRequest": {
@@ -787,4 +787,12 @@ swagger_config = {
     "swagger_ui": True,
     "specs_route": "/apidocs/",
     "headers": [],
+}
+
+# Merged into the top level of the generated spec. A global `security` here
+# applies the X-API-Key requirement to every operation, so the Swagger UI
+# "Authorize" button injects the key into each "Try it out" request. flasgger
+# only honors a top-level `security` via the template, not the config dict.
+swagger_template = {
+    "security": [{"ApiKeyAuth": []}],
 }

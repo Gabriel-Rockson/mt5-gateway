@@ -35,6 +35,11 @@ Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfo
 
 Full interactive API documentation available at `http://localhost:10003/apidocs` after starting the server.
 
+The docs themselves don't require the API key. To call endpoints from the docs,
+click **Authorize** (top right), paste your `MT5_API_KEY`, and "Try it out"
+requests will carry the `X-API-Key` header automatically. Set `MT5_DOCS_USER` and
+`MT5_DOCS_PASSWORD` to put an HTTP Basic login in front of the docs.
+
 ## Example Usage
 
 Get account info:

@@ -9,7 +9,12 @@ from flasgger import Swagger
 from flask import Flask
 from flask_cors import CORS
 from logging_config import configure_logging
-from middleware import APIKeyMiddleware, MT5SerializeMiddleware, RequestIDMiddleware
+from middleware import (
+    APIKeyMiddleware,
+    DocsAuthMiddleware,
+    MT5SerializeMiddleware,
+    RequestIDMiddleware,
+)
 from mt5_connection import MT5Connection
 from routes.account import account_bp
 from routes.data import data_bp
@@ -20,7 +25,7 @@ from routes.order import order_bp
 from routes.position import position_bp
 from routes.state import state_bp
 from routes.symbol import symbol_bp
-from swagger import swagger_config
+from swagger import swagger_config, swagger_template
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
@@ -35,11 +40,13 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, expose_headers=["X-Request-ID"])
 RequestIDMiddleware(app)
 APIKeyMiddleware(app, Config.MT5_API_KEY)
+if Config.docs_auth_enabled():
+    DocsAuthMiddleware(app, Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD)
 # Order matters: API key check (cheap, rejects unauth) runs before MT5 lock
 # acquisition (expensive, serializes against the broker_clock probe thread).
 MT5SerializeMiddleware(app)
 
-swagger = Swagger(app, config=swagger_config)
+swagger = Swagger(app, config=swagger_config, template=swagger_template)
 
 app.register_blueprint(health_bp)
 app.register_blueprint(symbol_bp)

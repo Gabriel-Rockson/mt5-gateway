@@ -34,20 +34,24 @@ _AUTH_EXEMPT_PATHS = frozenset({
 })
 
 # The Swagger UI and its spec describe the API but expose no account state or
-# trading actions, so they're public — the protection belongs on the API
-# routes. The UI page lives under /apidocs/, fetches its spec from
-# /apispec_1.json, and loads its assets from /flasgger_static/ (prefix match).
-_AUTH_EXEMPT_PREFIXES = (
+# trading actions, so they don't need the X-API-Key header — the protection
+# belongs on the API routes. The UI page lives under /apidocs/, fetches its
+# spec from /apispec_1.json, and loads its assets from /flasgger_static/
+# (prefix match). These are instead gated by DocsAuthMiddleware when docs
+# credentials are configured.
+_DOCS_PREFIXES = (
     '/apidocs',
     '/apispec_1.json',
     '/flasgger_static/',
 )
 
 
+def _is_docs_path(path: str) -> bool:
+    return any(path.startswith(prefix) for prefix in _DOCS_PREFIXES)
+
+
 def _is_auth_exempt(path: str) -> bool:
-    if path in _AUTH_EXEMPT_PATHS:
-        return True
-    return any(path.startswith(prefix) for prefix in _AUTH_EXEMPT_PREFIXES)
+    return path in _AUTH_EXEMPT_PATHS or _is_docs_path(path)
 
 
 class APIKeyMiddleware:
@@ -86,6 +90,49 @@ class APIKeyMiddleware:
             response.status_code = 401
             return response
         return None
+
+
+class DocsAuthMiddleware:
+    """Gates the API docs paths behind HTTP Basic auth.
+
+    The docs are exempt from the X-API-Key check (they expose no account state
+    or trading actions), but the API surface they describe shouldn't be readable
+    by anyone who can reach the port. Basic auth puts a native browser login in
+    front of /apidocs, its spec, and its static assets, using credentials
+    separate from the API key. Only installed when both docs credentials are
+    configured; otherwise the docs stay public.
+    """
+
+    _REALM = 'MT5 Gateway API docs'
+
+    def __init__(self, app, username: str, password: str):
+        if not username or not password:
+            raise RuntimeError(
+                "DocsAuthMiddleware requires non-empty username and password"
+            )
+        self.username = username
+        self.password = password
+        app.before_request(self.before_request)
+
+    def before_request(self):
+        if not _is_docs_path(request.path):
+            return None
+
+        auth = request.authorization
+        if (
+            auth is None
+            or auth.type != 'basic'
+            or not hmac.compare_digest(auth.username or '', self.username)
+            or not hmac.compare_digest(auth.password or '', self.password)
+        ):
+            return self._challenge()
+        return None
+
+    def _challenge(self):
+        response = jsonify({"error": "unauthorized"})
+        response.status_code = 401
+        response.headers['WWW-Authenticate'] = f'Basic realm="{self._REALM}"'
+        return response
 
 
 class MT5SerializeMiddleware:

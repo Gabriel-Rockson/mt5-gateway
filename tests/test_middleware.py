@@ -7,7 +7,19 @@ Covers the three security/correctness invariants:
 - The MT5 serialization lock is never leaked (a leak would deadlock the gateway,
   since the MetaTrader5 module is shared single-threaded state).
 """
+import base64
+
+import pytest
+from flask import Flask
+
+from config import Config
+from middleware import DocsAuthMiddleware
 from mt5_connection import MT5Connection
+
+
+def _basic_auth(username, password):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
 
 class TestAPIKeyAuth:
@@ -47,6 +59,91 @@ class TestAPIKeyAuth:
         ):
             resp = client.get(path)
             assert resp.status_code != 401, path
+
+
+class TestDocsAuth:
+    DOCS_USER = "docs"
+    DOCS_PASSWORD = "s3cret"
+
+    @pytest.fixture
+    def docs_client(self):
+        app = Flask(__name__)
+
+        @app.route("/apidocs/")
+        def apidocs():
+            return "docs"
+
+        @app.route("/flasgger_static/<path:_asset>")
+        def asset(_asset):
+            return "asset"
+
+        @app.route("/order", methods=["POST"])
+        def order():
+            return "ok"
+
+        @app.route("/health")
+        def health():
+            return "ok"
+
+        DocsAuthMiddleware(app, self.DOCS_USER, self.DOCS_PASSWORD)
+        return app.test_client()
+
+    def test_missing_credentials_challenged(self, docs_client):
+        resp = docs_client.get("/apidocs/")
+        assert resp.status_code == 401
+        assert resp.headers["WWW-Authenticate"].startswith("Basic ")
+
+    def test_wrong_credentials_rejected(self, docs_client):
+        resp = docs_client.get("/apidocs/", headers=_basic_auth("docs", "wrong"))
+        assert resp.status_code == 401
+
+    def test_correct_credentials_allowed(self, docs_client):
+        resp = docs_client.get(
+            "/apidocs/", headers=_basic_auth(self.DOCS_USER, self.DOCS_PASSWORD)
+        )
+        assert resp.status_code == 200
+
+    def test_static_assets_protected(self, docs_client):
+        resp = docs_client.get("/flasgger_static/swagger-ui.css")
+        assert resp.status_code == 401
+        resp = docs_client.get(
+            "/flasgger_static/swagger-ui.css",
+            headers=_basic_auth(self.DOCS_USER, self.DOCS_PASSWORD),
+        )
+        assert resp.status_code == 200
+
+    def test_non_docs_paths_untouched(self, docs_client):
+        # Docs auth gates only the docs paths; the API key check (a separate
+        # middleware) is what guards these.
+        assert docs_client.post("/order").status_code == 200
+        assert docs_client.get("/health").status_code == 200
+
+    def test_requires_both_credentials(self):
+        with pytest.raises(RuntimeError):
+            DocsAuthMiddleware(Flask(__name__), "docs", "")
+
+
+class TestConfigDocsAuth:
+    @pytest.fixture
+    def _restore_docs_env(self):
+        original = (Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD)
+        yield
+        Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD = original
+
+    def test_both_set_enables_auth(self, _restore_docs_env):
+        Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD = "docs", "pw"
+        assert Config.docs_auth_enabled()
+        Config.validate()
+
+    def test_neither_set_keeps_docs_public(self, _restore_docs_env):
+        Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD = "", ""
+        assert not Config.docs_auth_enabled()
+        Config.validate()
+
+    def test_only_one_set_fails_validation(self, _restore_docs_env):
+        Config.MT5_DOCS_USER, Config.MT5_DOCS_PASSWORD = "docs", ""
+        with pytest.raises(ValueError):
+            Config.validate()
 
 
 class TestRequestID:
