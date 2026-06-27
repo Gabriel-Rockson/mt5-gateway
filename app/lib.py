@@ -82,7 +82,11 @@ def validate_symbol(symbol_name):
     """
     now = time.monotonic()
     with _symbol_select_cache_lock:
-        if now - _symbol_select_ok.get(symbol_name, 0.0) < _SYMBOL_SELECT_TTL_S:
+        # A missing entry must mean "not selected", not "selected at t=0":
+        # time.monotonic() can be < TTL on a freshly-booted host, which would
+        # make the 0.0 default look fresh and skip the select for every symbol.
+        last = _symbol_select_ok.get(symbol_name)
+        if last is not None and now - last < _SYMBOL_SELECT_TTL_S:
             return True
 
     if not mt5.symbol_select(symbol_name, True):

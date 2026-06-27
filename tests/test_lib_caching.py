@@ -42,6 +42,14 @@ class TestSymbolSelectCache:
         assert lib.validate_symbol("XAUUSD") is True
         assert mt5.symbol_select.call_count == 2
 
+    def test_select_called_when_monotonic_below_ttl(self, mt5, monkeypatch):
+        # On a freshly-booted host time.monotonic() can be smaller than the TTL.
+        # An un-cached symbol must still be selected, not treated as fresh from
+        # a 0.0 default timestamp.
+        monkeypatch.setattr(lib.time, "monotonic", lambda: 5.0)
+        assert lib.validate_symbol("XAUUSD") is True
+        assert mt5.symbol_select.call_count == 1
+
     def test_failed_select_not_cached(self, mt5):
         mt5.symbol_select.return_value = False
         assert lib.validate_symbol("BOGUS") is False
