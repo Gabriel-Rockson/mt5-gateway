@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.8.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.7.1...mt5-gateway-v1.8.0) (2026-06-27)
+
+
+### Features
+
+* **mt5-gateway:** authorizable swagger docs with optional basic auth ([558cafb](https://github.com/Gabriel-Rockson/axiom/commit/558cafbc9f5feaa241abc0a969da1702101f0f8b))
+
+
+### Bug Fixes
+
+* **mt5-gateway:** don't skip symbol_select when monotonic clock is below TTL ([8165cc8](https://github.com/Gabriel-Rockson/axiom/commit/8165cc8c22f9e4912b3d7cdae728b2d1a19854c2))
+* **mt5-gateway:** make apidocs reachable without X-API-Key ([a454dcc](https://github.com/Gabriel-Rockson/axiom/commit/a454dcc40f2b9280c8569354c34b9af5dd6424f8))
+
 ## [1.7.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.7.0...mt5-gateway-v1.7.1) (2026-06-21)
 
 
