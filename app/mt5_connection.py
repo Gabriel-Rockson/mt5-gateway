@@ -42,6 +42,14 @@ class MT5Connection:
         # drop via their own null-checks and return 503.
         self._liveness_probe_interval = float(os.getenv('MT5_LIVENESS_PROBE_INTERVAL', '15.0'))
         self._last_liveness_ok = 0.0
+        # Cooldown after a failed initialize() sequence. Without this, every
+        # request that comes in while MT5 is down (e.g. logged out) triggers
+        # its own full multi-attempt IPC handshake — each attempt can block a
+        # waitress worker thread for up to ~60s. Enough concurrent requests
+        # exhausts the whole thread pool, starving even /health/live (which
+        # never touches MT5) of a free thread to run on.
+        self._reconnect_cooldown = float(os.getenv('MT5_RECONNECT_COOLDOWN', '30.0'))
+        self._last_initialize_attempt = 0.0
 
     @classmethod
     def get_instance(cls) -> 'MT5Connection':
@@ -135,6 +143,7 @@ class MT5Connection:
         final_error = f"Failed to initialize MT5 after {self._max_reconnect_attempts} attempts"
         logger.error(final_error)
         self._set_status(ConnectionStatus.DISCONNECTED, final_error)
+        self._last_initialize_attempt = time.monotonic()
         return False
 
     def ensure_connection(self) -> bool:
@@ -155,6 +164,9 @@ class MT5Connection:
             except Exception as e:
                 logger.warning(f"MT5 connection check failed: {str(e)}")
                 self._set_status(ConnectionStatus.DISCONNECTED, str(e))
+
+        if time.monotonic() - self._last_initialize_attempt < self._reconnect_cooldown:
+            return False
 
         logger.info("Attempting to reconnect to MT5")
         return self.initialize()
