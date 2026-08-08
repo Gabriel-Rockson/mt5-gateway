@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.8.0...mt5-gateway-v1.8.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** point healthcheck at /health/live and widen its window ([355dc68](https://github.com/Gabriel-Rockson/axiom/commit/355dc68f1793e43b3d8ef3eac8ccce86228b219b))
+
 ## [1.8.0](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.7.1...mt5-gateway-v1.8.0) (2026-06-27)
 
 
