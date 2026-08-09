@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.8.1...mt5-gateway-v1.8.2) (2026-08-09)
+
+
+### Bug Fixes
+
+* **mt5-gateway:** add reconnect cooldown to stop thread-pool exhaustion while MT5 is down ([05b55ba](https://github.com/Gabriel-Rockson/axiom/commit/05b55ba0b74ee4a5ed0ae1892e414700b96ecbab))
+
 ## [1.8.1](https://github.com/Gabriel-Rockson/axiom/compare/mt5-gateway-v1.8.0...mt5-gateway-v1.8.1) (2026-08-08)
 
 
